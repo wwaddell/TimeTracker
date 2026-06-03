@@ -1,0 +1,329 @@
+@page "/admin"
+@using TimeTracker.Contracts.Admin
+@using TimeTracker.Domain.Enums
+@inject TimeTracker.Web.Services.TimeTrackerApi Api
+@inject IJSRuntime JS
+
+<PageTitle>Manage Fields</PageTitle>
+
+<h1 class="mb-4">Manage Fields</h1>
+
+@if (organizations is null)
+{
+    <p><em>Loading…</em></p>
+}
+else if (organizations.Count == 0)
+{
+    <div class="alert alert-warning">No organizations available for your account.</div>
+}
+else
+{
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <label class="form-label">Organization</label>
+            <select class="form-select" @onchange="OnOrgChanged">
+                @foreach (var org in organizations)
+                {
+                    <option value="@org.Id" selected="@(org.Id == selectedOrgId)">
+                        @org.Name@(org.RoleName is null ? "" : $" — {org.RoleName}")
+                    </option>
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (infoMessage is not null)
+    {
+        <div class="alert alert-info">@infoMessage</div>
+    }
+
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h2 class="h4 mb-0">Configurable fields</h2>
+        @if (!showEditor)
+        {
+            <button class="btn btn-primary btn-sm" @onclick="() => NewField()">+ Add field</button>
+        }
+    </div>
+
+    @if (fields is null)
+    {
+        <p><em>Loading…</em></p>
+    }
+    else if (fields.Count == 0)
+    {
+        <p class="text-muted">No fields defined yet. The base note is always collected; add fields to capture more.</p>
+    }
+    else
+    {
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th>Label</th><th>Key</th><th>Type</th><th>Required</th>
+                    <th>Role</th><th>Active</th><th>Sort</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var f in fields)
+                {
+                    <tr class="@(f.IsActive ? "" : "text-muted")">
+                        <td>@f.Label</td>
+                        <td><code>@f.FieldKey</code></td>
+                        <td>@f.DataType</td>
+                        <td>@(f.IsRequired ? "Yes" : "No")</td>
+                        <td>@(f.OrganizationRoleName ?? "All roles")</td>
+                        <td>@(f.IsActive ? "Yes" : "No")</td>
+                        <td>@f.SortOrder</td>
+                        <td class="text-end">
+                            <button class="btn btn-outline-secondary btn-sm me-1" @onclick="() => EditField(f)">Edit</button>
+                            <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteFieldAsync(f)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (showEditor && editing is not null)
+    {
+        <div class="card mt-3">
+            <div class="card-header">@(editing.Id == 0 ? "New field" : $"Edit “{editing.Label}”")</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-sm-6">
+                        <label class="form-label">Label <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="editing.Label" />
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label">Key <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="editing.FieldKey" placeholder="e.g. project_code" />
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label">Type</label>
+                        <select class="form-select" @bind="editing.DataType">
+                            @foreach (var dt in Enum.GetValues<FieldDataType>())
+                            {
+                                <option value="@dt">@dt</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label">Role</label>
+                        <select class="form-select" @bind="editing.OrganizationRoleId">
+                            <option value="">All roles</option>
+                            @foreach (var role in roles ?? [])
+                            {
+                                <option value="@role.Id">@role.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label">Sort order</label>
+                        <input type="number" class="form-control" @bind="editing.SortOrder" />
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input" id="req" @bind="editing.IsRequired" />
+                            <label class="form-check-label" for="req">Required</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input" id="act" @bind="editing.IsActive" />
+                            <label class="form-check-label" for="act">Active</label>
+                        </div>
+                    </div>
+                </div>
+
+                @if (editing.DataType == FieldDataType.Select)
+                {
+                    <hr />
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong>Options</strong>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="AddOption">+ Add option</button>
+                    </div>
+                    @if (editing.Options.Count == 0)
+                    {
+                        <p class="text-muted small">Add at least one option for a select field.</p>
+                    }
+                    @foreach (var opt in editing.Options)
+                    {
+                        <div class="row g-2 mb-2">
+                            <div class="col-sm-5">
+                                <input class="form-control form-control-sm" placeholder="Value" @bind="opt.Value" />
+                            </div>
+                            <div class="col-sm-5">
+                                <input class="form-control form-control-sm" placeholder="Label" @bind="opt.Label" />
+                            </div>
+                            <div class="col-sm-2">
+                                <button class="btn btn-outline-danger btn-sm" @onclick="() => RemoveOption(opt)">Remove</button>
+                            </div>
+                        </div>
+                    }
+                }
+
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger mt-3 mb-0">@errorMessage</div>
+                }
+            </div>
+            <div class="card-footer text-end">
+                <button class="btn btn-link" @onclick="CancelEdit">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveAsync" disabled="@saving">
+                    @(saving ? "Saving…" : "Save field")
+                </button>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private IReadOnlyList<OrganizationDtoLite>? organizations;
+    private IReadOnlyList<OrganizationRoleDto>? roles;
+    private IReadOnlyList<EntryFieldAdminDto>? fields;
+    private int selectedOrgId;
+
+    private FieldEditModel? editing;
+    private bool showEditor;
+    private bool saving;
+    private string? errorMessage;
+    private string? infoMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var orgs = await Api.GetOrganizationsAsync();
+        organizations = orgs.Select(o => new OrganizationDtoLite(o.Id, o.Name, o.RoleName)).ToList();
+        if (organizations.Count > 0)
+        {
+            selectedOrgId = organizations[0].Id;
+            await LoadAsync();
+        }
+    }
+
+    private async Task OnOrgChanged(ChangeEventArgs e)
+    {
+        selectedOrgId = int.Parse(e.Value!.ToString()!);
+        CancelEdit();
+        infoMessage = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        roles = await Api.GetRolesAsync(selectedOrgId);
+        fields = await Api.GetAdminFieldsAsync(selectedOrgId);
+    }
+
+    private void NewField()
+    {
+        var nextSort = (fields is { Count: > 0 } ? fields.Max(f => f.SortOrder) : 0) + 1;
+        editing = new FieldEditModel { SortOrder = nextSort, IsActive = true, DataType = FieldDataType.Text };
+        errorMessage = null;
+        showEditor = true;
+    }
+
+    private void EditField(EntryFieldAdminDto f)
+    {
+        editing = new FieldEditModel
+        {
+            Id = f.Id,
+            FieldKey = f.FieldKey,
+            Label = f.Label,
+            DataType = f.DataType,
+            IsRequired = f.IsRequired,
+            SortOrder = f.SortOrder,
+            IsActive = f.IsActive,
+            OrganizationRoleId = f.OrganizationRoleId,
+            Options = f.Options.Select(o => new OptionEditModel { Value = o.Value, Label = o.Label }).ToList(),
+        };
+        errorMessage = null;
+        showEditor = true;
+    }
+
+    private void CancelEdit()
+    {
+        showEditor = false;
+        editing = null;
+        errorMessage = null;
+    }
+
+    private void AddOption() => editing?.Options.Add(new OptionEditModel());
+
+    private void RemoveOption(OptionEditModel opt) => editing?.Options.Remove(opt);
+
+    private async Task SaveAsync()
+    {
+        if (editing is null)
+        {
+            return;
+        }
+
+        errorMessage = null;
+        saving = true;
+        try
+        {
+            var request = new SaveEntryFieldRequest
+            {
+                FieldKey = editing.FieldKey,
+                Label = editing.Label,
+                DataType = editing.DataType,
+                IsRequired = editing.IsRequired,
+                SortOrder = editing.SortOrder,
+                IsActive = editing.IsActive,
+                OrganizationRoleId = editing.OrganizationRoleId,
+                Options = editing.Options
+                    .Where(o => !string.IsNullOrWhiteSpace(o.Value))
+                    .Select((o, i) => new EntryFieldOptionInput(o.Value, o.Label, i + 1))
+                    .ToList(),
+            };
+
+            var result = editing.Id == 0
+                ? await Api.CreateFieldAsync(selectedOrgId, request)
+                : await Api.UpdateFieldAsync(selectedOrgId, editing.Id, request);
+
+            if (result.Success)
+            {
+                CancelEdit();
+                await LoadAsync();
+            }
+            else
+            {
+                errorMessage = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeleteFieldAsync(EntryFieldAdminDto f)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete the field “{f.Label}”?"))
+        {
+            return;
+        }
+
+        var result = await Api.DeleteFieldAsync(selectedOrgId, f.Id);
+        infoMessage = result.Message;
+        await LoadAsync();
+    }
+
+    private sealed class FieldEditModel
+    {
+        public int Id { get; set; }
+        public string FieldKey { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+        public FieldDataType DataType { get; set; } = FieldDataType.Text;
+        public bool IsRequired { get; set; }
+        public int SortOrder { get; set; }
+        public bool IsActive { get; set; } = true;
+        public int? OrganizationRoleId { get; set; }
+        public List<OptionEditModel> Options { get; set; } = new();
+    }
+
+    private sealed class OptionEditModel
+    {
+        public string Value { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+    }
+
+    private record OrganizationDtoLite(int Id, string Name, string? RoleName);
+}

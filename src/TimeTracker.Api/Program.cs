@@ -37,5 +37,6 @@ app.UseHttpsRedirection();
 app.UseCors(WebCorsPolicy);
 
 app.MapTimeTrackerEndpoints();
+app.MapAdminEndpoints();
 
 app.Run();
