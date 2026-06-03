@@ -41,6 +41,7 @@ public record TimeEntryDto(
     TimeOnly? StartTime,
     int? DurationMinutes,
     string Note,
+    int? TaskId,
     string? TaskTitle,
     DateTime CreatedUtc,
     IReadOnlyList<TimeEntryAttributeDto> Attributes);

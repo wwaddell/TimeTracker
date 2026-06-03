@@ -63,6 +63,7 @@ public static class TimeEntryEndpoints
                 .Take(50)
                 .Select(e => new TimeEntryDto(
                     e.Id, e.EntryDate, e.StartTime, e.DurationMinutes, e.Note,
+                    e.TaskId,
                     e.Task != null ? e.Task.Title : null,
                     e.CreatedUtc,
                     e.Attributes.Select(a => new TimeEntryAttributeDto(
@@ -124,6 +125,72 @@ public static class TimeEntryEndpoints
             await db.SaveChangesAsync();
 
             return Results.Created($"/api/organizations/{orgId}/time-entries/{entry.Id}", new { entry.Id });
+        });
+
+        // Update a time entry (core fields + attributes).
+        api.MapPut("/api/organizations/{orgId:int}/time-entries/{id:long}",
+            async (int orgId, long id, CreateTimeEntryRequest request, TimeTrackerDbContext db, ICurrentUser currentUser) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Note))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["note"] = ["A note describing what was completed is required."],
+                });
+            }
+
+            var userId = await currentUser.GetUserIdAsync();
+            var entry = await db.TimeEntries
+                .Include(e => e.Attributes)
+                .FirstOrDefaultAsync(e => e.Id == id && e.OrganizationId == orgId && e.UserId == userId);
+            if (entry is null)
+            {
+                return Results.NotFound();
+            }
+
+            entry.TaskId = request.TaskId;
+            entry.EntryDate = request.EntryDate == default ? entry.EntryDate : request.EntryDate;
+            entry.StartTime = request.StartTime;
+            entry.DurationMinutes = request.DurationMinutes;
+            entry.Note = request.Note.Trim();
+            entry.ModifiedUtc = DateTime.UtcNow;
+
+            var validFieldIds = await db.TimeEntryFields
+                .Where(f => f.OrganizationId == orgId && f.IsActive)
+                .Select(f => f.Id)
+                .ToListAsync();
+
+            db.TimeEntryAttributes.RemoveRange(entry.Attributes);
+            entry.Attributes.Clear();
+            foreach (var (fieldId, value) in request.Attributes)
+            {
+                if (!validFieldIds.Contains(fieldId) || string.IsNullOrWhiteSpace(value))
+                {
+                    continue;
+                }
+
+                entry.Attributes.Add(new TimeEntryAttribute { TimeEntryFieldId = fieldId, Value = value });
+            }
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { entry.Id });
+        });
+
+        // Delete a time entry (its attributes cascade).
+        api.MapDelete("/api/organizations/{orgId:int}/time-entries/{id:long}",
+            async (int orgId, long id, TimeTrackerDbContext db, ICurrentUser currentUser) =>
+        {
+            var userId = await currentUser.GetUserIdAsync();
+            var entry = await db.TimeEntries
+                .FirstOrDefaultAsync(e => e.Id == id && e.OrganizationId == orgId && e.UserId == userId);
+            if (entry is null)
+            {
+                return Results.NotFound();
+            }
+
+            db.TimeEntries.Remove(entry);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
         });
     }
 }

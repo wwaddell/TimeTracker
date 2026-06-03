@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using TimeTracker.Contracts.Admin;
+using TimeTracker.Contracts.Tasks;
 using TimeTracker.Contracts.TimeEntries;
 
 namespace TimeTracker.Web.Services;
@@ -18,11 +19,28 @@ public class TimeTrackerApi(HttpClient http)
     public async Task<IReadOnlyList<TimeEntryDto>> GetTimeEntriesAsync(int orgId) =>
         await http.GetFromJsonAsync<List<TimeEntryDto>>($"/api/organizations/{orgId}/time-entries") ?? [];
 
-    public async Task<bool> CreateTimeEntryAsync(int orgId, CreateTimeEntryRequest request)
-    {
-        var response = await http.PostAsJsonAsync($"/api/organizations/{orgId}/time-entries", request);
-        return response.IsSuccessStatusCode;
-    }
+    public async Task<ApiResult> CreateTimeEntryAsync(int orgId, CreateTimeEntryRequest request) =>
+        await SendAsync(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/time-entries", request));
+
+    public async Task<ApiResult> UpdateTimeEntryAsync(int orgId, long id, CreateTimeEntryRequest request) =>
+        await SendAsync(() => http.PutAsJsonAsync($"/api/organizations/{orgId}/time-entries/{id}", request));
+
+    public async Task<ApiResult> DeleteTimeEntryAsync(int orgId, long id) =>
+        await SendAsync(() => http.DeleteAsync($"/api/organizations/{orgId}/time-entries/{id}"));
+
+    // --- Tasks ---
+
+    public async Task<IReadOnlyList<TaskDto>> GetTasksAsync(int orgId) =>
+        await http.GetFromJsonAsync<List<TaskDto>>($"/api/organizations/{orgId}/tasks") ?? [];
+
+    public async Task<ApiResult> CreateTaskAsync(int orgId, SaveTaskRequest request) =>
+        await SendAsync(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/tasks", request));
+
+    public async Task<ApiResult> UpdateTaskAsync(int orgId, int id, SaveTaskRequest request) =>
+        await SendAsync(() => http.PutAsJsonAsync($"/api/organizations/{orgId}/tasks/{id}", request));
+
+    public async Task<ApiResult> DeleteTaskAsync(int orgId, int id) =>
+        await SendAsync(() => http.DeleteAsync($"/api/organizations/{orgId}/tasks/{id}"));
 
     // --- Admin: configurable fields ---
 

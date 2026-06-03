@@ -1,0 +1,115 @@
+using Microsoft.EntityFrameworkCore;
+using TimeTracker.Api.Auth;
+using TimeTracker.Contracts.Tasks;
+using TimeTracker.Domain.Entities;
+using TimeTracker.Infrastructure.Persistence;
+
+namespace TimeTracker.Api.Endpoints;
+
+public static class TaskEndpoints
+{
+    public static void MapTaskEndpoints(this IEndpointRouteBuilder app)
+    {
+        var api = app.MapGroup("").RequireAuthorization();
+
+        // List the current user's tasks within an org.
+        api.MapGet("/api/organizations/{orgId:int}/tasks", async (int orgId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
+        {
+            var userId = await currentUser.GetUserIdAsync();
+            if (!await IsMemberAsync(db, userId, orgId))
+            {
+                return Results.Forbid();
+            }
+
+            var tasks = await db.Tasks
+                .Where(t => t.UserId == userId && t.OrganizationId == orgId)
+                .OrderBy(t => t.IsComplete).ThenByDescending(t => t.Id)
+                .Select(t => new TaskDto(t.Id, t.Title, t.Description, t.IsComplete, t.CreatedUtc))
+                .ToListAsync();
+
+            return Results.Ok(tasks);
+        });
+
+        // Create a task.
+        api.MapPost("/api/organizations/{orgId:int}/tasks",
+            async (int orgId, SaveTaskRequest request, TimeTrackerDbContext db, ICurrentUser currentUser) =>
+        {
+            var userId = await currentUser.GetUserIdAsync();
+            if (!await IsMemberAsync(db, userId, orgId))
+            {
+                return Results.Forbid();
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Title))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["title"] = ["A title is required."],
+                });
+            }
+
+            var task = new TaskItem
+            {
+                UserId = userId,
+                OrganizationId = orgId,
+                Title = request.Title.Trim(),
+                Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
+                IsComplete = request.IsComplete,
+                CreatedUtc = DateTime.UtcNow,
+            };
+            db.Tasks.Add(task);
+            await db.SaveChangesAsync();
+
+            return Results.Created($"/api/organizations/{orgId}/tasks/{task.Id}", new { task.Id });
+        });
+
+        // Update a task.
+        api.MapPut("/api/organizations/{orgId:int}/tasks/{id:int}",
+            async (int orgId, int id, SaveTaskRequest request, TimeTrackerDbContext db, ICurrentUser currentUser) =>
+        {
+            var userId = await currentUser.GetUserIdAsync();
+            var task = await db.Tasks
+                .FirstOrDefaultAsync(t => t.Id == id && t.OrganizationId == orgId && t.UserId == userId);
+            if (task is null)
+            {
+                return Results.NotFound();
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Title))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["title"] = ["A title is required."],
+                });
+            }
+
+            task.Title = request.Title.Trim();
+            task.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+            task.IsComplete = request.IsComplete;
+            task.ModifiedUtc = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { task.Id });
+        });
+
+        // Delete a task (linked time entries keep their data; their task link is cleared).
+        api.MapDelete("/api/organizations/{orgId:int}/tasks/{id:int}",
+            async (int orgId, int id, TimeTrackerDbContext db, ICurrentUser currentUser) =>
+        {
+            var userId = await currentUser.GetUserIdAsync();
+            var task = await db.Tasks
+                .FirstOrDefaultAsync(t => t.Id == id && t.OrganizationId == orgId && t.UserId == userId);
+            if (task is null)
+            {
+                return Results.NotFound();
+            }
+
+            db.Tasks.Remove(task);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+    }
+
+    private static Task<bool> IsMemberAsync(TimeTrackerDbContext db, int userId, int orgId) =>
+        db.UserOrganizations.AnyAsync(m => m.UserId == userId && m.OrganizationId == orgId);
+}

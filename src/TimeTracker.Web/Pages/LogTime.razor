@@ -1,8 +1,11 @@
 @page "/"
 @page "/log"
 @using TimeTracker.Contracts.TimeEntries
-@using TimeTracker.Domain.Enums
+@using TimeTracker.Contracts.Tasks
+@using TimeTracker.Web.Components
+@using TimeTracker.Web.Models
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
+@inject IJSRuntime JS
 
 <PageTitle>Log Time</PageTitle>
 
@@ -34,85 +37,14 @@ else
 
     <div class="card mb-4">
         <div class="card-body">
-            <div class="mb-3">
-                <label class="form-label">Note <span class="text-danger">*</span></label>
-                <textarea class="form-control" rows="2" placeholder="What did you work on?"
-                          @bind="note" @bind:event="oninput"></textarea>
-            </div>
-
-            <div class="row g-3 mb-3">
-                <div class="col-sm-4">
-                    <label class="form-label">Date</label>
-                    <input type="date" class="form-control" @bind="entryDate" />
-                </div>
-                <div class="col-sm-4">
-                    <label class="form-label">Start time</label>
-                    <input type="time" class="form-control" @bind="startTime" />
-                </div>
-                <div class="col-sm-4">
-                    <label class="form-label">Duration (min)</label>
-                    <input type="number" min="0" class="form-control" @bind="durationMinutes" />
-                </div>
-            </div>
-
-            @if (fields is { Count: > 0 })
+            <TimeEntryFields Model="createModel" Fields="fields ?? []" Tasks="tasks" />
+            @if (createError is not null)
             {
-                <hr />
-                <div class="row g-3">
-                    @foreach (var field in fields)
-                    {
-                        <div class="col-sm-6">
-                            <label class="form-label">
-                                @field.Label
-                                @if (field.IsRequired)
-                                {
-                                    <span class="text-danger">*</span>
-                                }
-                            </label>
-                            @switch (field.DataType)
-                            {
-                                case FieldDataType.Boolean:
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input"
-                                               checked="@IsTrue(field.Id)"
-                                               @onchange="e => OnBoolChanged(field.Id, e)" />
-                                    </div>
-                                    break;
-                                case FieldDataType.Select:
-                                    <select class="form-select"
-                                            @onchange="e => SetValue(field.Id, e.Value?.ToString())">
-                                        <option value="">— select —</option>
-                                        @foreach (var opt in field.Options)
-                                        {
-                                            <option value="@opt.Value" selected="@IsSelected(field.Id, opt.Value)">@opt.Label</option>
-                                        }
-                                    </select>
-                                    break;
-                                case FieldDataType.Number:
-                                    <input type="number" class="form-control" value="@GetValue(field.Id)"
-                                           @onchange="e => SetValue(field.Id, e.Value?.ToString())" />
-                                    break;
-                                case FieldDataType.Date:
-                                    <input type="date" class="form-control" value="@GetValue(field.Id)"
-                                           @onchange="e => SetValue(field.Id, e.Value?.ToString())" />
-                                    break;
-                                default:
-                                    <input type="text" class="form-control" value="@GetValue(field.Id)"
-                                           @onchange="e => SetValue(field.Id, e.Value?.ToString())" />
-                                    break;
-                            }
-                        </div>
-                    }
-                </div>
-            }
-
-            @if (errorMessage is not null)
-            {
-                <div class="alert alert-danger mt-3 mb-0">@errorMessage</div>
+                <div class="alert alert-danger mt-3 mb-0">@createError</div>
             }
         </div>
         <div class="card-footer text-end">
-            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@(saving || string.IsNullOrWhiteSpace(note))">
+            <button class="btn btn-primary" @onclick="SaveCreateAsync" disabled="@saving">
                 @(saving ? "Saving…" : "Log entry")
             </button>
         </div>
@@ -129,10 +61,10 @@ else
     }
     else
     {
-        <ul class="list-group">
+        <div class="list-group">
             @foreach (var entry in entries)
             {
-                <li class="list-group-item">
+                <button type="button" class="list-group-item list-group-item-action" @onclick="() => OpenEdit(entry)">
                     <div class="d-flex justify-content-between">
                         <strong>@entry.Note</strong>
                         <small class="text-muted">
@@ -141,35 +73,69 @@ else
                             @(entry.DurationMinutes is { } d ? $"· {d} min" : "")
                         </small>
                     </div>
-                    @if (entry.Attributes.Count > 0)
+                    @if (entry.TaskTitle is not null || entry.Attributes.Count > 0)
                     {
                         <div class="mt-1">
+                            @if (entry.TaskTitle is not null)
+                            {
+                                <span class="badge bg-info text-dark me-1">Task: @entry.TaskTitle</span>
+                            }
                             @foreach (var attr in entry.Attributes)
                             {
                                 <span class="badge bg-secondary me-1">@attr.Label: @attr.Value</span>
                             }
                         </div>
                     }
-                </li>
+                </button>
             }
-        </ul>
+        </div>
     }
+}
+
+@if (editEntry is not null && editModel is not null)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit entry</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEdit"></button>
+                </div>
+                <div class="modal-body">
+                    <TimeEntryFields Model="editModel" Fields="fields ?? []" Tasks="tasks" />
+                    @if (editError is not null)
+                    {
+                        <div class="alert alert-danger mt-3 mb-0">@editError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-danger me-auto" @onclick="DeleteEditAsync" disabled="@editSaving">Delete</button>
+                    <button class="btn btn-link" @onclick="CloseEdit">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveEditAsync" disabled="@editSaving">
+                        @(editSaving ? "Saving…" : "Save changes")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
 }
 
 @code {
     private IReadOnlyList<OrganizationDto>? organizations;
     private IReadOnlyList<EntryFieldDto>? fields;
+    private IReadOnlyList<TaskDto>? tasks;
     private IReadOnlyList<TimeEntryDto>? entries;
     private int selectedOrgId;
 
-    private string note = string.Empty;
-    private DateOnly entryDate = DateOnly.FromDateTime(DateTime.Now);
-    private TimeOnly? startTime = TimeOnly.FromDateTime(DateTime.Now);
-    private int? durationMinutes;
-    private readonly Dictionary<int, string?> fieldValues = new();
-
+    private TimeEntryModel createModel = new();
     private bool saving;
-    private string? errorMessage;
+    private string? createError;
+
+    private TimeEntryDto? editEntry;
+    private TimeEntryModel? editModel;
+    private bool editSaving;
+    private string? editError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -184,71 +150,38 @@ else
     private async Task OnOrgChanged(ChangeEventArgs e)
     {
         selectedOrgId = int.Parse(e.Value!.ToString()!);
-        fieldValues.Clear();
+        createModel = new TimeEntryModel();
+        createError = null;
         await LoadOrgDataAsync();
     }
 
     private async Task LoadOrgDataAsync()
     {
         fields = await Api.GetEntryFieldsAsync(selectedOrgId);
+        tasks = await Api.GetTasksAsync(selectedOrgId);
         entries = await Api.GetTimeEntriesAsync(selectedOrgId);
     }
 
-    private string? GetValue(int fieldId) => fieldValues.TryGetValue(fieldId, out var v) ? v : null;
-
-    private void SetValue(int fieldId, string? value) => fieldValues[fieldId] = value;
-
-    private bool IsTrue(int fieldId) => GetValue(fieldId) == "true";
-
-    private bool IsSelected(int fieldId, string value) => GetValue(fieldId) == value;
-
-    private void OnBoolChanged(int fieldId, ChangeEventArgs e) =>
-        SetValue(fieldId, e.Value is true ? "true" : "false");
-
-    private async Task SaveAsync()
+    private async Task SaveCreateAsync()
     {
-        errorMessage = null;
-        if (string.IsNullOrWhiteSpace(note))
+        createError = Validate(createModel);
+        if (createError is not null)
         {
-            errorMessage = "A note is required.";
-            return;
-        }
-
-        // Enforce required configurable fields client-side.
-        var missing = (fields ?? [])
-            .Where(f => f.IsRequired && string.IsNullOrWhiteSpace(GetValue(f.Id)))
-            .Select(f => f.Label)
-            .ToList();
-        if (missing.Count > 0)
-        {
-            errorMessage = $"Required: {string.Join(", ", missing)}";
             return;
         }
 
         saving = true;
         try
         {
-            var request = new CreateTimeEntryRequest
+            var result = await Api.CreateTimeEntryAsync(selectedOrgId, ToRequest(createModel));
+            if (result.Success)
             {
-                Note = note,
-                EntryDate = entryDate,
-                StartTime = startTime,
-                DurationMinutes = durationMinutes,
-                Attributes = new Dictionary<int, string?>(fieldValues),
-            };
-
-            if (await Api.CreateTimeEntryAsync(selectedOrgId, request))
-            {
-                note = string.Empty;
-                durationMinutes = null;
-                fieldValues.Clear();
-                entryDate = DateOnly.FromDateTime(DateTime.Now);
-                startTime = TimeOnly.FromDateTime(DateTime.Now);
+                createModel = new TimeEntryModel();
                 entries = await Api.GetTimeEntriesAsync(selectedOrgId);
             }
             else
             {
-                errorMessage = "Failed to save the entry. Please try again.";
+                createError = result.Error;
             }
         }
         finally
@@ -256,4 +189,116 @@ else
             saving = false;
         }
     }
+
+    private void OpenEdit(TimeEntryDto entry)
+    {
+        editEntry = entry;
+        editModel = new TimeEntryModel
+        {
+            Note = entry.Note,
+            EntryDate = entry.EntryDate,
+            StartTime = entry.StartTime,
+            DurationMinutes = entry.DurationMinutes,
+            TaskId = entry.TaskId,
+            Attributes = entry.Attributes.ToDictionary(a => a.FieldId, a => a.Value),
+        };
+        editError = null;
+    }
+
+    private void CloseEdit()
+    {
+        editEntry = null;
+        editModel = null;
+        editError = null;
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (editEntry is null || editModel is null)
+        {
+            return;
+        }
+
+        editError = Validate(editModel);
+        if (editError is not null)
+        {
+            return;
+        }
+
+        editSaving = true;
+        try
+        {
+            var result = await Api.UpdateTimeEntryAsync(selectedOrgId, editEntry.Id, ToRequest(editModel));
+            if (result.Success)
+            {
+                CloseEdit();
+                entries = await Api.GetTimeEntriesAsync(selectedOrgId);
+            }
+            else
+            {
+                editError = result.Error;
+            }
+        }
+        finally
+        {
+            editSaving = false;
+        }
+    }
+
+    private async Task DeleteEditAsync()
+    {
+        if (editEntry is null)
+        {
+            return;
+        }
+
+        if (!await JS.InvokeAsync<bool>("confirm", "Delete this time entry?"))
+        {
+            return;
+        }
+
+        editSaving = true;
+        try
+        {
+            var result = await Api.DeleteTimeEntryAsync(selectedOrgId, editEntry.Id);
+            if (result.Success)
+            {
+                CloseEdit();
+                entries = await Api.GetTimeEntriesAsync(selectedOrgId);
+            }
+            else
+            {
+                editError = result.Error;
+            }
+        }
+        finally
+        {
+            editSaving = false;
+        }
+    }
+
+    private string? Validate(TimeEntryModel model)
+    {
+        if (string.IsNullOrWhiteSpace(model.Note))
+        {
+            return "A note is required.";
+        }
+
+        var missing = (fields ?? [])
+            .Where(f => f.IsRequired &&
+                string.IsNullOrWhiteSpace(model.Attributes.TryGetValue(f.Id, out var v) ? v : null))
+            .Select(f => f.Label)
+            .ToList();
+        return missing.Count > 0 ? $"Required: {string.Join(", ", missing)}" : null;
+    }
+
+    private static CreateTimeEntryRequest ToRequest(TimeEntryModel model) => new()
+    {
+        Note = model.Note,
+        EntryDate = model.EntryDate,
+        StartTime = model.StartTime,
+        DurationMinutes = model.DurationMinutes,
+        TaskId = model.TaskId,
+        Attributes = new Dictionary<int, string?>(model.Attributes),
+    };
 }

@@ -1,0 +1,112 @@
+@using TimeTracker.Contracts.TimeEntries
+@using TimeTracker.Contracts.Tasks
+@using TimeTracker.Domain.Enums
+@using TimeTracker.Web.Models
+
+<div class="mb-3">
+    <label class="form-label">Note <span class="text-danger">*</span></label>
+    <textarea class="form-control" rows="2" placeholder="What did you work on?"
+              @bind="Model.Note" @bind:event="oninput"></textarea>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-sm-4">
+        <label class="form-label">Date</label>
+        <input type="date" class="form-control" @bind="Model.EntryDate" />
+    </div>
+    <div class="col-sm-4">
+        <label class="form-label">Start time</label>
+        <input type="time" class="form-control" @bind="Model.StartTime" />
+    </div>
+    <div class="col-sm-4">
+        <label class="form-label">Duration (min)</label>
+        <input type="number" min="0" class="form-control" @bind="Model.DurationMinutes" />
+    </div>
+</div>
+
+@if (Tasks is { Count: > 0 })
+{
+    <div class="mb-3">
+        <label class="form-label">Task</label>
+        <select class="form-select" @bind="Model.TaskId">
+            <option value="">— none —</option>
+            @foreach (var task in Tasks)
+            {
+                <option value="@task.Id">@task.Title</option>
+            }
+        </select>
+    </div>
+}
+
+@if (Fields is { Count: > 0 })
+{
+    <hr />
+    <div class="row g-3">
+        @foreach (var field in Fields)
+        {
+            <div class="col-sm-6">
+                <label class="form-label">
+                    @field.Label
+                    @if (field.IsRequired)
+                    {
+                        <span class="text-danger">*</span>
+                    }
+                </label>
+                @switch (field.DataType)
+                {
+                    case FieldDataType.Boolean:
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input"
+                                   checked="@IsTrue(field.Id)"
+                                   @onchange="e => OnBoolChanged(field.Id, e)" />
+                        </div>
+                        break;
+                    case FieldDataType.Select:
+                        <select class="form-select"
+                                @onchange="e => SetValue(field.Id, e.Value?.ToString())">
+                            <option value="">— select —</option>
+                            @foreach (var opt in field.Options)
+                            {
+                                <option value="@opt.Value" selected="@IsSelected(field.Id, opt.Value)">@opt.Label</option>
+                            }
+                        </select>
+                        break;
+                    case FieldDataType.Number:
+                        <input type="number" class="form-control" value="@GetValue(field.Id)"
+                               @onchange="e => SetValue(field.Id, e.Value?.ToString())" />
+                        break;
+                    case FieldDataType.Date:
+                        <input type="date" class="form-control" value="@GetValue(field.Id)"
+                               @onchange="e => SetValue(field.Id, e.Value?.ToString())" />
+                        break;
+                    default:
+                        <input type="text" class="form-control" value="@GetValue(field.Id)"
+                               @onchange="e => SetValue(field.Id, e.Value?.ToString())" />
+                        break;
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public TimeEntryModel Model { get; set; } = default!;
+    [Parameter] public IReadOnlyList<EntryFieldDto> Fields { get; set; } = [];
+    [Parameter] public IReadOnlyList<TaskDto>? Tasks { get; set; }
+
+    private string? GetValue(int fieldId) => Model.Attributes.TryGetValue(fieldId, out var v) ? v : null;
+
+    private void SetValue(int fieldId, string? value) => Model.Attributes[fieldId] = value;
+
+    private bool IsTrue(int fieldId) => GetValue(fieldId) == "true";
+
+    private bool IsSelected(int fieldId, string value) => GetValue(fieldId) == value;
+
+    private void OnBoolChanged(int fieldId, ChangeEventArgs e) =>
+        SetValue(fieldId, e.Value is true ? "true" : "false");
+
+    /// <summary>Labels of required fields left blank (for client-side validation).</summary>
+    public IReadOnlyList<string> MissingRequired() =>
+        Fields.Where(f => f.IsRequired && string.IsNullOrWhiteSpace(GetValue(f.Id)))
+              .Select(f => f.Label).ToList();
+}
