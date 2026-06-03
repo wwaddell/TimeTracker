@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TimeTracker.Api.Auth;
+using TimeTracker.Contracts;
 using TimeTracker.Contracts.TimeEntries;
 using TimeTracker.Domain.Entities;
 using TimeTracker.Infrastructure.Persistence;
@@ -53,14 +54,20 @@ public static class TimeEntryEndpoints
             return Results.Ok(fields);
         });
 
-        // Recent time entries for the current user in an org.
-        api.MapGet("/api/organizations/{orgId:int}/time-entries", async (int orgId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
+        // Recent time entries for the current user in an org (paged).
+        api.MapGet("/api/organizations/{orgId:int}/time-entries",
+            async (int orgId, int? page, int? pageSize, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
             var userId = await currentUser.GetUserIdAsync();
-            var entries = await db.TimeEntries
-                .Where(e => e.OrganizationId == orgId && e.UserId == userId)
+            var p = Math.Max(1, page ?? 1);
+            var size = Math.Clamp(pageSize ?? 10, 1, 100);
+
+            var query = db.TimeEntries.Where(e => e.OrganizationId == orgId && e.UserId == userId);
+            var total = await query.CountAsync();
+
+            var items = await query
                 .OrderByDescending(e => e.EntryDate).ThenByDescending(e => e.Id)
-                .Take(50)
+                .Skip((p - 1) * size).Take(size)
                 .Select(e => new TimeEntryDto(
                     e.Id, e.EntryDate, e.StartTime, e.DurationMinutes, e.Note,
                     e.TaskId,
@@ -70,7 +77,7 @@ public static class TimeEntryEndpoints
                         a.TimeEntryFieldId, a.TimeEntryField.Label, a.Value)).ToList()))
                 .ToListAsync();
 
-            return Results.Ok(entries);
+            return Results.Ok(new PagedResult<TimeEntryDto>(items, p, size, total));
         });
 
         // Create a time entry.

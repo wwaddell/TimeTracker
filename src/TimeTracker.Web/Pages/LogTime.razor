@@ -35,18 +35,20 @@ else
         </div>
     </div>
 
-    <div class="card mb-4">
+    <div class="card mb-3">
         <div class="card-body">
-            <TimeEntryFields Model="createModel" Fields="fields ?? []" Tasks="tasks" />
-            @if (createError is not null)
-            {
-                <div class="alert alert-danger mt-3 mb-0">@createError</div>
-            }
-        </div>
-        <div class="card-footer text-end">
-            <button class="btn btn-primary" @onclick="SaveCreateAsync" disabled="@saving">
-                @(saving ? "Saving…" : "Log entry")
-            </button>
+            <div class="input-group">
+                <input class="form-control" placeholder="Quick add — just a note…"
+                       @bind="quickNote" @bind:event="oninput" @onkeydown="QuickKeyDown" />
+                <button class="btn btn-outline-primary" @onclick="QuickAddAsync"
+                        disabled="@(quickAdding || string.IsNullOrWhiteSpace(quickNote))">
+                    @(quickAdding ? "Adding…" : "Quick add")
+                </button>
+                <button class="btn btn-primary" @onclick="OpenAdd">Add…</button>
+            </div>
+            <div class="form-text">
+                Quick add logs just the note now — rows still missing required fields are flagged so you can finish them later.
+            </div>
         </div>
     </div>
 
@@ -57,7 +59,7 @@ else
     }
     else if (entries.Count == 0)
     {
-        <p class="text-muted">No entries yet — log your first one above.</p>
+        <p class="text-muted">No entries yet — use Quick add or Add above.</p>
     }
     else
     {
@@ -66,21 +68,28 @@ else
             {
                 <button type="button" class="list-group-item list-group-item-action" @onclick="() => OpenEdit(entry)">
                     <div class="d-flex justify-content-between">
-                        <strong>@entry.Note</strong>
+                        <strong>
+                            @entry.Note
+                            @if (MissingLabels(entry) is { Count: > 0 } missing)
+                            {
+                                <span class="badge bg-warning text-dark ms-2"
+                                      title="@($"Missing required: {string.Join(", ", missing)}")">⚠ Incomplete</span>
+                            }
+                        </strong>
                         <small class="text-muted">
                             @entry.EntryDate.ToString("yyyy-MM-dd")
                             @(entry.StartTime is { } t ? t.ToString("HH:mm") : "")
                             @(entry.DurationMinutes is { } d ? $"· {d} min" : "")
                         </small>
                     </div>
-                    @if (entry.TaskTitle is not null || entry.Attributes.Count > 0)
+                    @if (entry.TaskTitle is not null || entry.Attributes.Any(a => !string.IsNullOrWhiteSpace(a.Value)))
                     {
                         <div class="mt-1">
                             @if (entry.TaskTitle is not null)
                             {
                                 <span class="badge bg-info text-dark me-1">Task: @entry.TaskTitle</span>
                             }
-                            @foreach (var attr in entry.Attributes)
+                            @foreach (var attr in entry.Attributes.Where(a => !string.IsNullOrWhiteSpace(a.Value)))
                             {
                                 <span class="badge bg-secondary me-1">@attr.Label: @attr.Value</span>
                             }
@@ -89,30 +98,42 @@ else
                 </button>
             }
         </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <small class="text-muted">@total @(total == 1 ? "entry" : "entries")</small>
+            <div class="btn-group">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="PrevPage" disabled="@(page <= 1)">‹ Prev</button>
+                <span class="btn btn-sm disabled">Page @(page) of @TotalPages</span>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="NextPage" disabled="@(page >= TotalPages)">Next ›</button>
+            </div>
+        </div>
     }
 }
 
-@if (editEntry is not null && editModel is not null)
+@if (dialogOpen && dialogModel is not null)
 {
     <div class="modal show d-block" tabindex="-1">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit entry</h5>
-                    <button type="button" class="btn-close" @onclick="CloseEdit"></button>
+                    <h5 class="modal-title">@(dialogEntryId is null ? "Add entry" : "Edit entry")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseDialog"></button>
                 </div>
                 <div class="modal-body">
-                    <TimeEntryFields Model="editModel" Fields="fields ?? []" Tasks="tasks" />
-                    @if (editError is not null)
+                    <TimeEntryFields Model="dialogModel" Fields="fields ?? []" Tasks="tasks" />
+                    @if (dialogError is not null)
                     {
-                        <div class="alert alert-danger mt-3 mb-0">@editError</div>
+                        <div class="alert alert-danger mt-3 mb-0">@dialogError</div>
                     }
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-outline-danger me-auto" @onclick="DeleteEditAsync" disabled="@editSaving">Delete</button>
-                    <button class="btn btn-link" @onclick="CloseEdit">Cancel</button>
-                    <button class="btn btn-primary" @onclick="SaveEditAsync" disabled="@editSaving">
-                        @(editSaving ? "Saving…" : "Save changes")
+                    @if (dialogEntryId is not null)
+                    {
+                        <button class="btn btn-outline-danger me-auto" @onclick="DeleteDialogAsync" disabled="@dialogSaving">Delete</button>
+                    }
+                    <button class="btn btn-link" @onclick="CloseDialog">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveDialogAsync" disabled="@dialogSaving">
+                        @(dialogSaving ? "Saving…" : "Save")
                     </button>
                 </div>
             </div>
@@ -122,20 +143,26 @@ else
 }
 
 @code {
+    private const int PageSize = 10;
+
     private IReadOnlyList<OrganizationDto>? organizations;
     private IReadOnlyList<EntryFieldDto>? fields;
     private IReadOnlyList<TaskDto>? tasks;
     private IReadOnlyList<TimeEntryDto>? entries;
     private int selectedOrgId;
+    private int page = 1;
+    private int total;
 
-    private TimeEntryModel createModel = new();
-    private bool saving;
-    private string? createError;
+    private string quickNote = string.Empty;
+    private bool quickAdding;
 
-    private TimeEntryDto? editEntry;
-    private TimeEntryModel? editModel;
-    private bool editSaving;
-    private string? editError;
+    private bool dialogOpen;
+    private long? dialogEntryId;
+    private TimeEntryModel? dialogModel;
+    private bool dialogSaving;
+    private string? dialogError;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(total / (double)PageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -150,8 +177,7 @@ else
     private async Task OnOrgChanged(ChangeEventArgs e)
     {
         selectedOrgId = int.Parse(e.Value!.ToString()!);
-        createModel = new TimeEntryModel();
-        createError = null;
+        page = 1;
         await LoadOrgDataAsync();
     }
 
@@ -159,41 +185,83 @@ else
     {
         fields = await Api.GetEntryFieldsAsync(selectedOrgId);
         tasks = await Api.GetTasksAsync(selectedOrgId);
-        entries = await Api.GetTimeEntriesAsync(selectedOrgId);
+        await LoadEntriesAsync();
     }
 
-    private async Task SaveCreateAsync()
+    private async Task LoadEntriesAsync()
     {
-        createError = Validate(createModel);
-        if (createError is not null)
+        var result = await Api.GetTimeEntriesAsync(selectedOrgId, page, PageSize);
+        entries = result.Items;
+        total = result.Total;
+        if (page > TotalPages)
+        {
+            page = TotalPages;
+            var clamped = await Api.GetTimeEntriesAsync(selectedOrgId, page, PageSize);
+            entries = clamped.Items;
+            total = clamped.Total;
+        }
+    }
+
+    private async Task PrevPage()
+    {
+        if (page > 1) { page--; await LoadEntriesAsync(); }
+    }
+
+    private async Task NextPage()
+    {
+        if (page < TotalPages) { page++; await LoadEntriesAsync(); }
+    }
+
+    private async Task QuickKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await QuickAddAsync();
+        }
+    }
+
+    private async Task QuickAddAsync()
+    {
+        if (string.IsNullOrWhiteSpace(quickNote))
         {
             return;
         }
 
-        saving = true;
+        quickAdding = true;
         try
         {
-            var result = await Api.CreateTimeEntryAsync(selectedOrgId, ToRequest(createModel));
+            var request = new CreateTimeEntryRequest
+            {
+                Note = quickNote.Trim(),
+                EntryDate = DateOnly.FromDateTime(DateTime.Now),
+                StartTime = TimeOnly.FromDateTime(DateTime.Now),
+            };
+            var result = await Api.CreateTimeEntryAsync(selectedOrgId, request);
             if (result.Success)
             {
-                createModel = new TimeEntryModel();
-                entries = await Api.GetTimeEntriesAsync(selectedOrgId);
-            }
-            else
-            {
-                createError = result.Error;
+                quickNote = string.Empty;
+                page = 1;
+                await LoadEntriesAsync();
             }
         }
         finally
         {
-            saving = false;
+            quickAdding = false;
         }
+    }
+
+    private void OpenAdd()
+    {
+        dialogEntryId = null;
+        dialogModel = new TimeEntryModel();
+        dialogError = null;
+        dialogOpen = true;
     }
 
     private void OpenEdit(TimeEntryDto entry)
     {
-        editEntry = entry;
-        editModel = new TimeEntryModel
+        dialogEntryId = entry.Id;
+        dialogModel = new TimeEntryModel
         {
             Note = entry.Note,
             EntryDate = entry.EntryDate,
@@ -202,52 +270,59 @@ else
             TaskId = entry.TaskId,
             Attributes = entry.Attributes.ToDictionary(a => a.FieldId, a => a.Value),
         };
-        editError = null;
+        dialogError = null;
+        dialogOpen = true;
     }
 
-    private void CloseEdit()
+    private void CloseDialog()
     {
-        editEntry = null;
-        editModel = null;
-        editError = null;
+        dialogOpen = false;
+        dialogModel = null;
+        dialogEntryId = null;
+        dialogError = null;
     }
 
-    private async Task SaveEditAsync()
+    private async Task SaveDialogAsync()
     {
-        if (editEntry is null || editModel is null)
+        if (dialogModel is null)
         {
             return;
         }
 
-        editError = Validate(editModel);
-        if (editError is not null)
+        dialogError = Validate(dialogModel);
+        if (dialogError is not null)
         {
             return;
         }
 
-        editSaving = true;
+        dialogSaving = true;
         try
         {
-            var result = await Api.UpdateTimeEntryAsync(selectedOrgId, editEntry.Id, ToRequest(editModel));
+            var request = ToRequest(dialogModel);
+            var result = dialogEntryId is null
+                ? await Api.CreateTimeEntryAsync(selectedOrgId, request)
+                : await Api.UpdateTimeEntryAsync(selectedOrgId, dialogEntryId.Value, request);
+
             if (result.Success)
             {
-                CloseEdit();
-                entries = await Api.GetTimeEntriesAsync(selectedOrgId);
+                if (dialogEntryId is null) { page = 1; }
+                CloseDialog();
+                await LoadEntriesAsync();
             }
             else
             {
-                editError = result.Error;
+                dialogError = result.Error;
             }
         }
         finally
         {
-            editSaving = false;
+            dialogSaving = false;
         }
     }
 
-    private async Task DeleteEditAsync()
+    private async Task DeleteDialogAsync()
     {
-        if (editEntry is null)
+        if (dialogEntryId is null)
         {
             return;
         }
@@ -257,24 +332,37 @@ else
             return;
         }
 
-        editSaving = true;
+        dialogSaving = true;
         try
         {
-            var result = await Api.DeleteTimeEntryAsync(selectedOrgId, editEntry.Id);
+            var result = await Api.DeleteTimeEntryAsync(selectedOrgId, dialogEntryId.Value);
             if (result.Success)
             {
-                CloseEdit();
-                entries = await Api.GetTimeEntriesAsync(selectedOrgId);
+                CloseDialog();
+                await LoadEntriesAsync();
             }
             else
             {
-                editError = result.Error;
+                dialogError = result.Error;
             }
         }
         finally
         {
-            editSaving = false;
+            dialogSaving = false;
         }
+    }
+
+    // Required fields (for the current org) that this entry hasn't filled in.
+    private List<string> MissingLabels(TimeEntryDto entry)
+    {
+        var filled = entry.Attributes
+            .Where(a => !string.IsNullOrWhiteSpace(a.Value))
+            .Select(a => a.FieldId)
+            .ToHashSet();
+        return (fields ?? [])
+            .Where(f => f.IsRequired && !filled.Contains(f.Id))
+            .Select(f => f.Label)
+            .ToList();
     }
 
     private string? Validate(TimeEntryModel model)

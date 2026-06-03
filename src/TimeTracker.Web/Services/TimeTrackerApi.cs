@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using TimeTracker.Contracts;
 using TimeTracker.Contracts.Admin;
 using TimeTracker.Contracts.Tasks;
 using TimeTracker.Contracts.TimeEntries;
@@ -16,8 +17,10 @@ public class TimeTrackerApi(HttpClient http)
     public async Task<IReadOnlyList<EntryFieldDto>> GetEntryFieldsAsync(int orgId) =>
         await http.GetFromJsonAsync<List<EntryFieldDto>>($"/api/organizations/{orgId}/entry-fields") ?? [];
 
-    public async Task<IReadOnlyList<TimeEntryDto>> GetTimeEntriesAsync(int orgId) =>
-        await http.GetFromJsonAsync<List<TimeEntryDto>>($"/api/organizations/{orgId}/time-entries") ?? [];
+    public async Task<PagedResult<TimeEntryDto>> GetTimeEntriesAsync(int orgId, int page, int pageSize) =>
+        await http.GetFromJsonAsync<PagedResult<TimeEntryDto>>(
+            $"/api/organizations/{orgId}/time-entries?page={page}&pageSize={pageSize}")
+        ?? new PagedResult<TimeEntryDto>([], page, pageSize, 0);
 
     public async Task<ApiResult> CreateTimeEntryAsync(int orgId, CreateTimeEntryRequest request) =>
         await SendAsync(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/time-entries", request));
