@@ -77,7 +77,15 @@ if (app.Environment.IsDevelopment())
     }
 }
 
-app.UseHttpsRedirection();
+// In Development the Blazor WASM client calls the API cross-origin over http
+// (http://localhost:5130). HTTPS redirection would answer those with a 307 to the
+// https port, and the redirect response carries no CORS headers — so the browser
+// blocks it. Only enforce HTTPS redirection outside Development.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseCors(WebCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
