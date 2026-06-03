@@ -82,8 +82,4 @@ public static class DevData
         });
         await db.SaveChangesAsync();
     }
-
-    /// <summary>Resolves the current user's id. Stub for real auth: always the dev user.</summary>
-    public static async Task<int> GetCurrentUserIdAsync(TimeTrackerDbContext db) =>
-        await db.Users.Where(u => u.ExternalId == DevUserExternalId).Select(u => u.Id).FirstAsync();
 }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TimeTracker.Api.Auth;
 using TimeTracker.Contracts.TimeEntries;
 using TimeTracker.Domain.Entities;
 using TimeTracker.Infrastructure.Persistence;
@@ -9,10 +10,13 @@ public static class TimeEntryEndpoints
 {
     public static void MapTimeTrackerEndpoints(this IEndpointRouteBuilder app)
     {
+        // All time-logging endpoints require an authenticated user.
+        var api = app.MapGroup("").RequireAuthorization();
+
         // Organizations the current user belongs to.
-        app.MapGet("/api/organizations", async (TimeTrackerDbContext db) =>
+        api.MapGet("/api/organizations", async (TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            var userId = await DevData.GetCurrentUserIdAsync(db);
+            var userId = await currentUser.GetUserIdAsync();
             var orgs = await db.UserOrganizations
                 .Where(m => m.UserId == userId)
                 .OrderByDescending(m => m.IsDefault).ThenBy(m => m.Organization.Name)
@@ -26,9 +30,9 @@ public static class TimeEntryEndpoints
         });
 
         // Configurable field definitions for an org (and the user's role within it).
-        app.MapGet("/api/organizations/{orgId:int}/entry-fields", async (int orgId, TimeTrackerDbContext db) =>
+        api.MapGet("/api/organizations/{orgId:int}/entry-fields", async (int orgId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            var userId = await DevData.GetCurrentUserIdAsync(db);
+            var userId = await currentUser.GetUserIdAsync();
             var membership = await db.UserOrganizations
                 .FirstOrDefaultAsync(m => m.UserId == userId && m.OrganizationId == orgId);
             if (membership is null)
@@ -50,9 +54,9 @@ public static class TimeEntryEndpoints
         });
 
         // Recent time entries for the current user in an org.
-        app.MapGet("/api/organizations/{orgId:int}/time-entries", async (int orgId, TimeTrackerDbContext db) =>
+        api.MapGet("/api/organizations/{orgId:int}/time-entries", async (int orgId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            var userId = await DevData.GetCurrentUserIdAsync(db);
+            var userId = await currentUser.GetUserIdAsync();
             var entries = await db.TimeEntries
                 .Where(e => e.OrganizationId == orgId && e.UserId == userId)
                 .OrderByDescending(e => e.EntryDate).ThenByDescending(e => e.Id)
@@ -69,8 +73,8 @@ public static class TimeEntryEndpoints
         });
 
         // Create a time entry.
-        app.MapPost("/api/organizations/{orgId:int}/time-entries",
-            async (int orgId, CreateTimeEntryRequest request, TimeTrackerDbContext db) =>
+        api.MapPost("/api/organizations/{orgId:int}/time-entries",
+            async (int orgId, CreateTimeEntryRequest request, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
             if (string.IsNullOrWhiteSpace(request.Note))
             {
@@ -80,7 +84,7 @@ public static class TimeEntryEndpoints
                 });
             }
 
-            var userId = await DevData.GetCurrentUserIdAsync(db);
+            var userId = await currentUser.GetUserIdAsync();
             var membership = await db.UserOrganizations
                 .FirstOrDefaultAsync(m => m.UserId == userId && m.OrganizationId == orgId);
             if (membership is null)

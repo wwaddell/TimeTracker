@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TimeTracker.Api.Auth;
 using TimeTracker.Contracts.Admin;
 using TimeTracker.Domain.Entities;
 using TimeTracker.Domain.Enums;
@@ -10,13 +11,13 @@ public static class AdminEndpoints
 {
     public static void MapAdminEndpoints(this IEndpointRouteBuilder app)
     {
-        // NOTE: admin authorization is not enforced yet — any member can manage fields.
-        // Once auth is wired, gate these on an org-admin role.
+        // Admin endpoints require the admin role (Entra app role "admin", or the dev backdoor).
+        var admin = app.MapGroup("").RequireAuthorization("Admin");
 
         // Roles defined by the org (for scoping fields).
-        app.MapGet("/api/organizations/{orgId:int}/roles", async (int orgId, TimeTrackerDbContext db) =>
+        admin.MapGet("/api/organizations/{orgId:int}/roles", async (int orgId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await IsMemberAsync(db, orgId))
+            if (!await IsMemberAsync(db, currentUser, orgId))
             {
                 return Results.Forbid();
             }
@@ -31,9 +32,9 @@ public static class AdminEndpoints
         });
 
         // All configurable fields for the org (including inactive, all roles).
-        app.MapGet("/api/organizations/{orgId:int}/admin/entry-fields", async (int orgId, TimeTrackerDbContext db) =>
+        admin.MapGet("/api/organizations/{orgId:int}/admin/entry-fields", async (int orgId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await IsMemberAsync(db, orgId))
+            if (!await IsMemberAsync(db, currentUser, orgId))
             {
                 return Results.Forbid();
             }
@@ -53,10 +54,10 @@ public static class AdminEndpoints
         });
 
         // Create a field.
-        app.MapPost("/api/organizations/{orgId:int}/admin/entry-fields",
-            async (int orgId, SaveEntryFieldRequest req, TimeTrackerDbContext db) =>
+        admin.MapPost("/api/organizations/{orgId:int}/admin/entry-fields",
+            async (int orgId, SaveEntryFieldRequest req, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await IsMemberAsync(db, orgId))
+            if (!await IsMemberAsync(db, currentUser, orgId))
             {
                 return Results.Forbid();
             }
@@ -88,10 +89,10 @@ public static class AdminEndpoints
         });
 
         // Update a field (replaces its option set).
-        app.MapPut("/api/organizations/{orgId:int}/admin/entry-fields/{fieldId:int}",
-            async (int orgId, int fieldId, SaveEntryFieldRequest req, TimeTrackerDbContext db) =>
+        admin.MapPut("/api/organizations/{orgId:int}/admin/entry-fields/{fieldId:int}",
+            async (int orgId, int fieldId, SaveEntryFieldRequest req, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await IsMemberAsync(db, orgId))
+            if (!await IsMemberAsync(db, currentUser, orgId))
             {
                 return Results.Forbid();
             }
@@ -128,10 +129,10 @@ public static class AdminEndpoints
         });
 
         // Delete a field — or deactivate it if it already has logged values (FK is Restrict).
-        app.MapDelete("/api/organizations/{orgId:int}/admin/entry-fields/{fieldId:int}",
-            async (int orgId, int fieldId, TimeTrackerDbContext db) =>
+        admin.MapDelete("/api/organizations/{orgId:int}/admin/entry-fields/{fieldId:int}",
+            async (int orgId, int fieldId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await IsMemberAsync(db, orgId))
+            if (!await IsMemberAsync(db, currentUser, orgId))
             {
                 return Results.Forbid();
             }
@@ -161,9 +162,9 @@ public static class AdminEndpoints
         });
     }
 
-    private static async Task<bool> IsMemberAsync(TimeTrackerDbContext db, int orgId)
+    private static async Task<bool> IsMemberAsync(TimeTrackerDbContext db, ICurrentUser currentUser, int orgId)
     {
-        var userId = await DevData.GetCurrentUserIdAsync(db);
+        var userId = await currentUser.GetUserIdAsync();
         return await db.UserOrganizations.AnyAsync(m => m.UserId == userId && m.OrganizationId == orgId);
     }
 
