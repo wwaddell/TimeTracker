@@ -85,28 +85,41 @@ else
                           @onclick="@(() => OpenEdit(entry))">
                     <div class="d-flex justify-space-between align-center">
                         <MudText Typo="Typo.subtitle1"><b>@entry.Note</b></MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                            @entry.EntryDate.ToString("yyyy-MM-dd")
-                            @(entry.StartTime is { } t ? t.ToString("HH:mm") : "")
-                            @(entry.DurationMinutes is { } d ? $"· {d} min" : "")
-                        </MudText>
+                        <div class="d-flex align-center flex-none" style="gap:.25rem">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @entry.EntryDate.ToString("yyyy-MM-dd")
+                                @(entry.StartTime is { } t ? t.ToString("HH:mm") : "")
+                                @(entry.DurationMinutes is { } d ? $"· {d} min" : "")
+                            </MudText>
+                            @if (missing.Count > 0)
+                            {
+                                <span @onclick:stopPropagation="true" @onclick="@(() => { })">
+                                    <MudMenu Icon="@Icons.Material.Filled.Warning" IconColor="Color.Warning" Size="Size.Small"
+                                             Dense="true" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopRight"
+                                             aria-label="Incomplete — show missing fields">
+                                        <MudText Typo="Typo.subtitle2" Class="px-4 pt-2 pb-1">Missing required</MudText>
+                                        @foreach (var m in missing)
+                                        {
+                                            <MudMenuItem Icon="@Icons.Material.Outlined.ErrorOutline" IconColor="Color.Warning">@m</MudMenuItem>
+                                        }
+                                    </MudMenu>
+                                </span>
+                            }
+                        </div>
                     </div>
-                    <MudChipSet T="string" Class="mt-1" ReadOnly="true">
-                        @if (missing.Count > 0)
-                        {
-                            <MudChip T="string" Color="Color.Warning" Size="Size.Small"
-                                     Icon="@Icons.Material.Filled.Warning"
-                                     title="@($"Missing required: {string.Join(", ", missing)}")">Incomplete</MudChip>
-                        }
-                        @if (entry.TaskTitle is not null)
-                        {
-                            <MudChip T="string" Color="Color.Info" Size="Size.Small">Task: @entry.TaskTitle</MudChip>
-                        }
-                        @foreach (var attr in entry.Attributes.Where(a => !string.IsNullOrWhiteSpace(a.Value)))
-                        {
-                            <MudChip T="string" Size="Size.Small">@attr.Label: @attr.Value</MudChip>
-                        }
-                    </MudChipSet>
+                    @if (entry.TaskTitle is not null || entry.Attributes.Any(a => !string.IsNullOrWhiteSpace(a.Value)))
+                    {
+                        <MudChipSet T="string" Class="mt-1" ReadOnly="true">
+                            @if (entry.TaskTitle is not null)
+                            {
+                                <MudChip T="string" Color="Color.Info" Size="Size.Small">Task: @entry.TaskTitle</MudChip>
+                            }
+                            @foreach (var attr in entry.Attributes.Where(a => !string.IsNullOrWhiteSpace(a.Value)))
+                            {
+                                <MudChip T="string" Size="Size.Small">@attr.Label: @attr.Value</MudChip>
+                            }
+                        </MudChipSet>
+                    }
                 </MudPaper>
             }
         </MudStack>
