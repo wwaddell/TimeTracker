@@ -5,6 +5,7 @@ public class Organization : AuditableEntity
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
     public bool IsActive { get; set; } = true;
 
     public ICollection<OrganizationRole> Roles { get; set; } = new List<OrganizationRole>();

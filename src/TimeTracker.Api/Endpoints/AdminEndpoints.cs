@@ -11,10 +11,10 @@ public static class AdminEndpoints
 {
     public static void MapAdminEndpoints(this IEndpointRouteBuilder app)
     {
-        // Admin endpoints require the admin role (Entra app role "admin", or the dev backdoor).
-        var admin = app.MapGroup("").RequireAuthorization("Admin");
+        // Authenticated; each endpoint then checks the specific org right it needs.
+        var admin = app.MapGroup("").RequireAuthorization();
 
-        // Roles defined by the org (for scoping fields).
+        // Roles defined by the org (id+name) — any member may read, used to scope fields/entries.
         admin.MapGet("/api/organizations/{orgId:int}/roles", async (int orgId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
             if (!await IsMemberAsync(db, currentUser, orgId))
@@ -34,7 +34,7 @@ public static class AdminEndpoints
         // All configurable fields for the org (including inactive, all roles).
         admin.MapGet("/api/organizations/{orgId:int}/admin/entry-fields", async (int orgId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await IsMemberAsync(db, currentUser, orgId))
+            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageFields))
             {
                 return Results.Forbid();
             }
@@ -57,7 +57,7 @@ public static class AdminEndpoints
         admin.MapPost("/api/organizations/{orgId:int}/admin/entry-fields",
             async (int orgId, SaveEntryFieldRequest req, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await IsMemberAsync(db, currentUser, orgId))
+            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageFields))
             {
                 return Results.Forbid();
             }
@@ -92,7 +92,7 @@ public static class AdminEndpoints
         admin.MapPut("/api/organizations/{orgId:int}/admin/entry-fields/{fieldId:int}",
             async (int orgId, int fieldId, SaveEntryFieldRequest req, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await IsMemberAsync(db, currentUser, orgId))
+            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageFields))
             {
                 return Results.Forbid();
             }
@@ -132,7 +132,7 @@ public static class AdminEndpoints
         admin.MapDelete("/api/organizations/{orgId:int}/admin/entry-fields/{fieldId:int}",
             async (int orgId, int fieldId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await IsMemberAsync(db, currentUser, orgId))
+            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageFields))
             {
                 return Results.Forbid();
             }

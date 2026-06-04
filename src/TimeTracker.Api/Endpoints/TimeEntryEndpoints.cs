@@ -18,14 +18,22 @@ public static class TimeEntryEndpoints
         api.MapGet("/api/organizations", async (TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
             var userId = await currentUser.GetUserIdAsync();
-            var orgs = await db.UserOrganizations
+            var memberships = await db.UserOrganizations
                 .Where(m => m.UserId == userId)
                 .OrderByDescending(m => m.IsDefault).ThenBy(m => m.Organization.Name)
-                .Select(m => new OrganizationDto(
+                .Select(m => new
+                {
                     m.OrganizationId,
                     m.Organization.Name,
-                    m.OrganizationRole != null ? m.OrganizationRole.Name : null))
+                    Roles = m.Roles.Select(r => r.OrganizationRole.Name).OrderBy(n => n).ToList(),
+                })
                 .ToListAsync();
+
+            var orgs = memberships
+                .Select(m => new OrganizationDto(
+                    m.OrganizationId, m.Name,
+                    m.Roles.Count > 0 ? string.Join(", ", m.Roles) : null))
+                .ToList();
 
             return Results.Ok(orgs);
         });
@@ -34,16 +42,18 @@ public static class TimeEntryEndpoints
         api.MapGet("/api/organizations/{orgId:int}/entry-fields", async (int orgId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
             var userId = await currentUser.GetUserIdAsync();
-            var membership = await db.UserOrganizations
-                .FirstOrDefaultAsync(m => m.UserId == userId && m.OrganizationId == orgId);
-            if (membership is null)
+            var isMember = await db.UserOrganizations
+                .AnyAsync(m => m.UserId == userId && m.OrganizationId == orgId);
+            if (!isMember)
             {
                 return Results.Forbid();
             }
 
+            // A field is shown if it's org-wide (no role) or scoped to one of the user's roles.
+            var roleIds = await currentUser.GetRoleIdsAsync(orgId);
             var fields = await db.TimeEntryFields
                 .Where(f => f.OrganizationId == orgId && f.IsActive
-                    && (f.OrganizationRoleId == null || f.OrganizationRoleId == membership.OrganizationRoleId))
+                    && (f.OrganizationRoleId == null || roleIds.Contains(f.OrganizationRoleId.Value)))
                 .OrderBy(f => f.SortOrder)
                 .Select(f => new EntryFieldDto(
                     f.Id, f.FieldKey, f.Label, f.DataType, f.IsRequired, f.SortOrder,

@@ -22,11 +22,6 @@ public class UserOrganizationConfiguration : IEntityTypeConfiguration<UserOrgani
             .HasForeignKey(x => x.OrganizationId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasOne(x => x.OrganizationRole)
-            .WithMany(r => r.Members)
-            .HasForeignKey(x => x.OrganizationRoleId)
-            .OnDelete(DeleteBehavior.SetNull);
-
         // A user belongs to a given org at most once.
         builder.HasIndex(x => new { x.UserId, x.OrganizationId }).IsUnique();
     }

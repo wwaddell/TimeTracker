@@ -14,7 +14,10 @@ public class TimeTrackerDbContext(DbContextOptions<TimeTrackerDbContext> options
     public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<User> Users => Set<User>();
     public DbSet<OrganizationRole> OrganizationRoles => Set<OrganizationRole>();
+    public DbSet<OrganizationRoleRight> OrganizationRoleRights => Set<OrganizationRoleRight>();
     public DbSet<UserOrganization> UserOrganizations => Set<UserOrganization>();
+    public DbSet<UserOrganizationRole> UserOrganizationRoles => Set<UserOrganizationRole>();
+    public DbSet<RightLookup> Rights => Set<RightLookup>();
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
     public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();
     public DbSet<TimeEntryField> TimeEntryFields => Set<TimeEntryField>();

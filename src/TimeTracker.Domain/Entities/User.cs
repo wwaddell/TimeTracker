@@ -9,8 +9,11 @@ public class User : AuditableEntity
 {
     public int Id { get; set; }
 
-    /// <summary>Stable subject identifier from the identity provider (oid/sub claim).</summary>
-    public string ExternalId { get; set; } = string.Empty;
+    /// <summary>
+    /// Stable subject identifier from the identity provider (oid/sub claim). Null for a
+    /// user who was invited by email but has not signed in yet (linked on first login).
+    /// </summary>
+    public string? ExternalId { get; set; }
 
     public string Email { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
