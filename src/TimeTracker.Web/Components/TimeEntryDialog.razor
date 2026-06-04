@@ -8,6 +8,12 @@
 <MudDialog>
     <DialogContent>
         <TimeEntryFields Model="model" Fields="Fields" Tasks="Tasks" />
+        @if (Entry is not null && MissingRequired() is { Count: > 0 } missing)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-3" Dense="true">
+                You can save now — this entry stays flagged incomplete until you fill: @string.Join(", ", missing)
+            </MudAlert>
+        }
         @if (error is not null)
         {
             <MudAlert Severity="Severity.Error" Class="mt-3" Dense="true">@error</MudAlert>
@@ -126,13 +132,21 @@
             return "A note is required.";
         }
 
-        var missing = Fields
-            .Where(f => f.IsRequired &&
-                string.IsNullOrWhiteSpace(model.Attributes.TryGetValue(f.Id, out var v) ? v : null))
-            .Select(f => f.Label)
-            .ToList();
-        return missing.Count > 0 ? $"Required: {string.Join(", ", missing)}" : null;
+        // New entries must be complete; an existing entry may be saved partially and
+        // simply stays flagged incomplete until the required fields are filled.
+        if (Entry is null && MissingRequired() is { Count: > 0 } missing)
+        {
+            return $"Required: {string.Join(", ", missing)}";
+        }
+
+        return null;
     }
+
+    private List<string> MissingRequired() => Fields
+        .Where(f => f.IsRequired &&
+            string.IsNullOrWhiteSpace(model.Attributes.TryGetValue(f.Id, out var v) ? v : null))
+        .Select(f => f.Label)
+        .ToList();
 
     private CreateTimeEntryRequest ToRequest() => new()
     {
