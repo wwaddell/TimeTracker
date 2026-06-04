@@ -47,6 +47,7 @@ else
     <MudPaper Class="pa-3 mb-6" Elevation="1">
         <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
             <MudTextField T="string" @bind-Value="quickNote" Immediate="true" Margin="Margin.Dense"
+                          Lines="2" AutoGrow="true" MaxLines="8"
                           Placeholder="Quick add — just a note…" Variant="Variant.Outlined"
                           Class="flex-grow-1" OnKeyDown="QuickKeyDown" />
             <MudTooltip Text="Quick add (note only)">
