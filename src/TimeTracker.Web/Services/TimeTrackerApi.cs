@@ -1,6 +1,10 @@
 using System.Net.Http.Json;
 using TimeTracker.Contracts;
 using TimeTracker.Contracts.Admin;
+using TimeTracker.Contracts.Members;
+using TimeTracker.Contracts.Organizations;
+using TimeTracker.Contracts.Rights;
+using TimeTracker.Contracts.Roles;
 using TimeTracker.Contracts.Tasks;
 using TimeTracker.Contracts.TimeEntries;
 
@@ -80,6 +84,44 @@ public class TimeTrackerApi(HttpClient http)
         var problem = await TryReadProblemAsync(response);
         return new DeleteFieldResult(false, false, problem ?? $"Delete failed ({(int)response.StatusCode}).");
     }
+
+    // --- Admin: rights, organization, members, roles ---
+
+    public async Task<IReadOnlyList<RightDto>> GetRightsAsync() =>
+        await GetAsync<List<RightDto>>("/api/rights") ?? [];
+
+    public async Task<OrganizationDetailsDto?> GetOrgDetailsAsync(int orgId) =>
+        await GetAsync<OrganizationDetailsDto>($"/api/organizations/{orgId}/details");
+
+    public async Task<ApiResult> SaveOrgDetailsAsync(int orgId, SaveOrganizationRequest request) =>
+        await SendAsync(() => http.PutAsJsonAsync($"/api/organizations/{orgId}/details", request));
+
+    public async Task<IReadOnlyList<MemberDto>> GetMembersAsync(int orgId) =>
+        await GetAsync<List<MemberDto>>($"/api/organizations/{orgId}/members") ?? [];
+
+    public async Task<ApiResult> InviteMemberAsync(int orgId, InviteMemberRequest request) =>
+        await SendAsync(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/members", request));
+
+    public async Task<ApiResult> SetMemberRolesAsync(int orgId, int userId, SetMemberRolesRequest request) =>
+        await SendAsync(() => http.PutAsJsonAsync($"/api/organizations/{orgId}/members/{userId}/roles", request));
+
+    public async Task<ApiResult> RemoveMemberAsync(int orgId, int userId) =>
+        await SendAsync(() => http.DeleteAsync($"/api/organizations/{orgId}/members/{userId}"));
+
+    public async Task<IReadOnlyList<RoleAdminDto>> GetAdminRolesAsync(int orgId) =>
+        await GetAsync<List<RoleAdminDto>>($"/api/organizations/{orgId}/roles/admin") ?? [];
+
+    public async Task<IReadOnlyList<RoleMemberDto>> GetRoleMembersAsync(int orgId, int roleId) =>
+        await GetAsync<List<RoleMemberDto>>($"/api/organizations/{orgId}/roles/{roleId}/members") ?? [];
+
+    public async Task<ApiResult> CreateRoleAsync(int orgId, SaveRoleRequest request) =>
+        await SendAsync(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/roles", request));
+
+    public async Task<ApiResult> UpdateRoleAsync(int orgId, int roleId, SaveRoleRequest request) =>
+        await SendAsync(() => http.PutAsJsonAsync($"/api/organizations/{orgId}/roles/{roleId}", request));
+
+    public async Task<ApiResult> DeleteRoleAsync(int orgId, int roleId) =>
+        await SendAsync(() => http.DeleteAsync($"/api/organizations/{orgId}/roles/{roleId}"));
 
     // --- Plumbing ---
 

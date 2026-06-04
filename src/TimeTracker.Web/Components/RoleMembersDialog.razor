@@ -1,0 +1,41 @@
+@using TimeTracker.Contracts.Roles
+@inject TimeTracker.Web.Services.TimeTrackerApi Api
+
+<MudDialog>
+    <DialogContent>
+        @if (members is null)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (members.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No members hold this role.</MudText>
+        }
+        else
+        {
+            <MudList T="string" Dense="true">
+                @foreach (var m in members)
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.Person">
+                        <MudText Typo="Typo.body2"><b>@m.DisplayName</b></MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@m.Email</MudText>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Close())">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public int OrgId { get; set; }
+    [Parameter] public int RoleId { get; set; }
+
+    private IReadOnlyList<RoleMemberDto>? members;
+
+    protected override async Task OnInitializedAsync() =>
+        members = await Api.GetRoleMembersAsync(OrgId, RoleId);
+}

@@ -1,0 +1,293 @@
+@page "/admin/users"
+@using TimeTracker.Contracts.Admin
+@using TimeTracker.Contracts.Members
+@using TimeTracker.Contracts.TimeEntries
+@using TimeTracker.Web.Services
+@inject TimeTrackerApi Api
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>Users</PageTitle>
+
+@if (loadError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <div class="d-flex align-center justify-space-between" style="gap:1rem">
+            <span>@loadError</span>
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAllAsync">Retry</MudButton>
+        </div>
+    </MudAlert>
+}
+
+@if (organizations is null)
+{
+    @if (loadError is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+}
+else if (organizations.Count == 0)
+{
+    <MudAlert Severity="Severity.Warning">No organizations available for your account.</MudAlert>
+}
+else
+{
+    <MudSelect T="int" Label="Organization" Value="selectedOrgId" ValueChanged="OnOrgChanged"
+               Variant="Variant.Outlined" Class="mb-4" Style="max-width:420px">
+        @foreach (var org in organizations)
+        {
+            <MudSelectItem T="int" Value="@org.Id">@org.Name</MudSelectItem>
+        }
+    </MudSelect>
+
+    <div class="d-flex justify-space-between align-center mb-3">
+        <MudText Typo="Typo.h5">Members</MudText>
+        @if (!editorOpen)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+                       OnClick="StartInvite">Invite user</MudButton>
+        }
+    </div>
+
+    @if (editorOpen)
+    {
+        <MudCard Class="mb-4" Elevation="2">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-2">@(isInvite ? "Invite user" : $"Edit roles — {editUserLabel}")</MudText>
+                @if (isInvite)
+                {
+                    <MudGrid>
+                        <MudItem xs="12" sm="6">
+                            <MudTextField T="string" Label="Email" @bind-Value="inviteEmail" Required="true" Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudTextField T="string" Label="Display name (optional)" @bind-Value="inviteName" Variant="Variant.Outlined" />
+                        </MudItem>
+                    </MudGrid>
+                }
+                <MudSelect T="int" Label="Roles" MultiSelection="true" @bind-SelectedValues="selectedRoleIds"
+                           Variant="Variant.Outlined" Class="mt-3" AnchorOrigin="Origin.BottomCenter">
+                    @foreach (var role in roles ?? [])
+                    {
+                        <MudSelectItem T="int" Value="@role.Id">@role.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (errorMessage is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@errorMessage</MudAlert>
+                }
+            </MudCardContent>
+            <MudCardActions>
+                <MudSpacer />
+                <MudButton OnClick="CancelEdit">Cancel</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
+                    @(saving ? "Saving…" : (isInvite ? "Send invite" : "Save roles"))
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+
+    @if (members is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (members.Count == 0)
+    {
+        <MudText Class="mud-text-secondary">No members yet. Invite someone to get started.</MudText>
+    }
+    else
+    {
+        <MudTable Items="members" Hover="true" Dense="true" Elevation="1">
+            <HeaderContent>
+                <MudTh>Name</MudTh><MudTh>Email</MudTh><MudTh>Roles</MudTh><MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <b>@context.DisplayName</b>
+                    @if (context.IsPending)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">Pending</MudChip>
+                    }
+                </MudTd>
+                <MudTd>@context.Email</MudTd>
+                <MudTd>
+                    <MudChipSet T="string" ReadOnly="true">
+                        @if (context.Roles.Count == 0)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">none</MudText>
+                        }
+                        @foreach (var r in context.Roles)
+                        {
+                            <MudChip T="string" Size="Size.Small">@r.Name</MudChip>
+                        }
+                    </MudChipSet>
+                </MudTd>
+                <MudTd Style="text-align:right; white-space:nowrap">
+                    <MudTooltip Text="Edit roles">
+                        <MudIconButton Icon="@Icons.Material.Filled.ManageAccounts" Size="Size.Small" OnClick="@(() => StartEditRoles(context))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Remove from org">
+                        <MudIconButton Icon="@Icons.Material.Filled.PersonRemove" Color="Color.Error" Size="Size.Small" OnClick="@(() => RemoveAsync(context))" />
+                    </MudTooltip>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+}
+
+@code {
+    private IReadOnlyList<OrganizationDto>? organizations;
+    private IReadOnlyList<MemberDto>? members;
+    private IReadOnlyList<OrganizationRoleDto>? roles;
+    private int selectedOrgId;
+
+    private bool editorOpen;
+    private bool isInvite;
+    private string inviteEmail = string.Empty;
+    private string? inviteName;
+    private int editUserId;
+    private string? editUserLabel;
+    private IReadOnlyCollection<int> selectedRoleIds = new HashSet<int>();
+
+    private bool saving;
+    private string? errorMessage;
+    private string? loadError;
+
+    protected override Task OnInitializedAsync() => ReloadAllAsync();
+
+    private Task ReloadAllAsync() => GuardAsync(async () =>
+    {
+        organizations = await Api.GetOrganizationsAsync();
+        if (organizations.Count > 0)
+        {
+            if (selectedOrgId == 0)
+            {
+                selectedOrgId = organizations[0].Id;
+            }
+            await LoadAsync();
+        }
+    });
+
+    private async Task OnOrgChanged(int orgId)
+    {
+        selectedOrgId = orgId;
+        CancelEdit();
+        await GuardAsync(LoadAsync);
+    }
+
+    private async Task LoadAsync()
+    {
+        roles = await Api.GetRolesAsync(selectedOrgId);
+        members = await Api.GetMembersAsync(selectedOrgId);
+    }
+
+    private void StartInvite()
+    {
+        isInvite = true;
+        inviteEmail = string.Empty;
+        inviteName = null;
+        selectedRoleIds = new HashSet<int>();
+        errorMessage = null;
+        editorOpen = true;
+    }
+
+    private void StartEditRoles(MemberDto member)
+    {
+        isInvite = false;
+        editUserId = member.UserId;
+        editUserLabel = member.DisplayName;
+        selectedRoleIds = member.Roles.Select(r => r.Id).ToHashSet();
+        errorMessage = null;
+        editorOpen = true;
+    }
+
+    private void CancelEdit()
+    {
+        editorOpen = false;
+        errorMessage = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        errorMessage = null;
+        if (isInvite && (string.IsNullOrWhiteSpace(inviteEmail) || !inviteEmail.Contains('@')))
+        {
+            errorMessage = "A valid email is required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            ApiResult result;
+            if (isInvite)
+            {
+                result = await Api.InviteMemberAsync(selectedOrgId, new InviteMemberRequest
+                {
+                    Email = inviteEmail,
+                    DisplayName = inviteName,
+                    RoleIds = selectedRoleIds.ToList(),
+                });
+            }
+            else
+            {
+                result = await Api.SetMemberRolesAsync(selectedOrgId, editUserId, new SetMemberRolesRequest
+                {
+                    RoleIds = selectedRoleIds.ToList(),
+                });
+            }
+
+            if (result.Success)
+            {
+                Snackbar.Add(isInvite ? "Invitation sent" : "Roles updated", Severity.Success);
+                CancelEdit();
+                await LoadAsync();
+            }
+            else
+            {
+                errorMessage = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task RemoveAsync(MemberDto member)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Remove {member.DisplayName} from this organization?"))
+        {
+            return;
+        }
+
+        var result = await Api.RemoveMemberAsync(selectedOrgId, member.UserId);
+        if (result.Success)
+        {
+            Snackbar.Add("Member removed", Severity.Success);
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Add(result.Error ?? "Could not remove the member.", Severity.Error);
+        }
+    }
+
+    private async Task GuardAsync(Func<Task> action)
+    {
+        try
+        {
+            loadError = null;
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex.Message;
+        }
+        catch (Exception)
+        {
+            loadError = "Something went wrong loading members. Please retry.";
+        }
+    }
+}

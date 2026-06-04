@@ -1,0 +1,165 @@
+@page "/admin/organization"
+@using TimeTracker.Contracts.Organizations
+@using TimeTracker.Contracts.TimeEntries
+@using TimeTracker.Web.Services
+@inject TimeTrackerApi Api
+@inject ISnackbar Snackbar
+
+<PageTitle>Organization</PageTitle>
+
+@if (loadError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <div class="d-flex align-center justify-space-between" style="gap:1rem">
+            <span>@loadError</span>
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAllAsync">Retry</MudButton>
+        </div>
+    </MudAlert>
+}
+
+@if (organizations is null)
+{
+    @if (loadError is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+}
+else if (organizations.Count == 0)
+{
+    <MudAlert Severity="Severity.Warning">No organizations available for your account.</MudAlert>
+}
+else
+{
+    <MudSelect T="int" Label="Organization" Value="selectedOrgId" ValueChanged="OnOrgChanged"
+               Variant="Variant.Outlined" Class="mb-4" Style="max-width:420px">
+        @foreach (var org in organizations)
+        {
+            <MudSelectItem T="int" Value="@org.Id">@org.Name</MudSelectItem>
+        }
+    </MudSelect>
+
+    <MudText Typo="Typo.h5" Class="mb-3">Organization details</MudText>
+
+    @if (details is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else
+    {
+        <MudCard Elevation="1" Style="max-width:640px">
+            <MudCardContent>
+                <MudTextField T="string" Label="Name" @bind-Value="name" Required="true"
+                              Variant="Variant.Outlined" Class="mb-3" />
+                <MudTextField T="string" Label="Description" @bind-Value="description" Lines="2"
+                              AutoGrow="true" MaxLines="10" Variant="Variant.Outlined" Class="mb-3" />
+                <MudSwitch T="bool" @bind-Value="isActive" Color="Color.Primary" Label="Active" />
+                @if (errorMessage is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@errorMessage</MudAlert>
+                }
+            </MudCardContent>
+            <MudCardActions>
+                <MudSpacer />
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
+                    @(saving ? "Saving…" : "Save changes")
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+}
+
+@code {
+    private IReadOnlyList<OrganizationDto>? organizations;
+    private OrganizationDetailsDto? details;
+    private int selectedOrgId;
+
+    private string name = string.Empty;
+    private string? description;
+    private bool isActive = true;
+
+    private bool saving;
+    private string? errorMessage;
+    private string? loadError;
+
+    protected override Task OnInitializedAsync() => ReloadAllAsync();
+
+    private Task ReloadAllAsync() => GuardAsync(async () =>
+    {
+        organizations = await Api.GetOrganizationsAsync();
+        if (organizations.Count > 0)
+        {
+            if (selectedOrgId == 0)
+            {
+                selectedOrgId = organizations[0].Id;
+            }
+            await LoadDetailsAsync();
+        }
+    });
+
+    private async Task OnOrgChanged(int orgId)
+    {
+        selectedOrgId = orgId;
+        details = null;
+        await GuardAsync(LoadDetailsAsync);
+    }
+
+    private async Task LoadDetailsAsync()
+    {
+        details = await Api.GetOrgDetailsAsync(selectedOrgId);
+        if (details is not null)
+        {
+            name = details.Name;
+            description = details.Description;
+            isActive = details.IsActive;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        errorMessage = null;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            errorMessage = "Name is required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var result = await Api.SaveOrgDetailsAsync(selectedOrgId,
+                new SaveOrganizationRequest { Name = name, Description = description, IsActive = isActive });
+            if (result.Success)
+            {
+                Snackbar.Add("Organization saved", Severity.Success);
+                organizations = await Api.GetOrganizationsAsync(); // reflect rename in the switcher
+                await LoadDetailsAsync();
+            }
+            else
+            {
+                errorMessage = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task GuardAsync(Func<Task> action)
+    {
+        try
+        {
+            loadError = null;
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex.Message;
+        }
+        catch (Exception)
+        {
+            loadError = "Something went wrong loading the organization. Please retry.";
+        }
+    }
+}

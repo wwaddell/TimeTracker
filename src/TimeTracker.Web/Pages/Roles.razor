@@ -1,0 +1,311 @@
+@page "/admin/roles"
+@using TimeTracker.Contracts.Rights
+@using TimeTracker.Contracts.Roles
+@using TimeTracker.Contracts.TimeEntries
+@using TimeTracker.Domain.Enums
+@using TimeTracker.Web.Components
+@using TimeTracker.Web.Services
+@inject TimeTrackerApi Api
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IJSRuntime JS
+
+<PageTitle>Roles</PageTitle>
+
+@if (loadError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <div class="d-flex align-center justify-space-between" style="gap:1rem">
+            <span>@loadError</span>
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAllAsync">Retry</MudButton>
+        </div>
+    </MudAlert>
+}
+
+@if (organizations is null)
+{
+    @if (loadError is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+}
+else if (organizations.Count == 0)
+{
+    <MudAlert Severity="Severity.Warning">No organizations available for your account.</MudAlert>
+}
+else
+{
+    <MudSelect T="int" Label="Organization" Value="selectedOrgId" ValueChanged="OnOrgChanged"
+               Variant="Variant.Outlined" Class="mb-4" Style="max-width:420px">
+        @foreach (var org in organizations)
+        {
+            <MudSelectItem T="int" Value="@org.Id">@org.Name</MudSelectItem>
+        }
+    </MudSelect>
+
+    <div class="d-flex justify-space-between align-center mb-3">
+        <MudText Typo="Typo.h5">Roles</MudText>
+        @if (!showEditor)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="NewRole">Add role</MudButton>
+        }
+    </div>
+
+    @if (showEditor && editing is not null)
+    {
+        <MudCard Class="mb-4" Elevation="2">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-2">@(editing.Id == 0 ? "New role" : "Edit role")</MudText>
+                <MudGrid>
+                    <MudItem xs="12" sm="8">
+                        <MudTextField T="string" Label="Name" @bind-Value="editing.Name" Required="true" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudNumericField T="int" Label="Sort order" @bind-Value="editing.SortOrder" Variant="Variant.Outlined" />
+                    </MudItem>
+                </MudGrid>
+                <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1">Rights</MudText>
+                @foreach (var right in rights ?? [])
+                {
+                    <div>
+                        <MudCheckBox T="bool" Dense="true"
+                                     Value="@editing.Rights.Contains(right.Id)"
+                                     ValueChanged="@(v => ToggleRight(right.Id, v))">
+                            @right.Name <MudText Typo="Typo.caption" Class="mud-text-secondary d-inline">— @right.Description</MudText>
+                        </MudCheckBox>
+                    </div>
+                }
+                @if (errorMessage is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@errorMessage</MudAlert>
+                }
+            </MudCardContent>
+            <MudCardActions>
+                <MudSpacer />
+                <MudButton OnClick="CancelEdit">Cancel</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
+                    @(saving ? "Saving…" : "Save role")
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+
+    @if (roles is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (roles.Count == 0)
+    {
+        <MudText Class="mud-text-secondary">No roles yet. Add one to grant rights and assign members.</MudText>
+    }
+    else
+    {
+        <MudTable Items="roles" Hover="true" Dense="true" Elevation="1">
+            <HeaderContent>
+                <MudTh>Name</MudTh><MudTh>Rights</MudTh><MudTh>Members</MudTh><MudTh>Sort</MudTh><MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd><b>@context.Name</b></MudTd>
+                <MudTd>
+                    <MudChipSet T="string" ReadOnly="true">
+                        @if (context.Rights.Count == 0)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">none</MudText>
+                        }
+                        @foreach (var r in context.Rights)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary">@RightName(r)</MudChip>
+                        }
+                    </MudChipSet>
+                </MudTd>
+                <MudTd>
+                    <MudButton Size="Size.Small" Variant="Variant.Text"
+                               StartIcon="@Icons.Material.Filled.People"
+                               OnClick="@(() => ShowMembersAsync(context))">@context.MemberCount</MudButton>
+                </MudTd>
+                <MudTd>@context.SortOrder</MudTd>
+                <MudTd Style="text-align:right; white-space:nowrap">
+                    <MudTooltip Text="Edit">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditRole(context))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Delete">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteAsync(context))" />
+                    </MudTooltip>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+}
+
+@code {
+    private IReadOnlyList<OrganizationDto>? organizations;
+    private IReadOnlyList<RoleAdminDto>? roles;
+    private IReadOnlyList<RightDto>? rights;
+    private int selectedOrgId;
+
+    private RoleEditModel? editing;
+    private bool showEditor;
+    private bool saving;
+    private string? errorMessage;
+    private string? loadError;
+
+    protected override Task OnInitializedAsync() => ReloadAllAsync();
+
+    private Task ReloadAllAsync() => GuardAsync(async () =>
+    {
+        organizations = await Api.GetOrganizationsAsync();
+        rights ??= await Api.GetRightsAsync();
+        if (organizations.Count > 0)
+        {
+            if (selectedOrgId == 0)
+            {
+                selectedOrgId = organizations[0].Id;
+            }
+            await LoadAsync();
+        }
+    });
+
+    private async Task OnOrgChanged(int orgId)
+    {
+        selectedOrgId = orgId;
+        CancelEdit();
+        await GuardAsync(LoadAsync);
+    }
+
+    private async Task LoadAsync() => roles = await Api.GetAdminRolesAsync(selectedOrgId);
+
+    private string RightName(OrgRight right) =>
+        rights?.FirstOrDefault(x => x.Id == right)?.Name ?? right.ToString();
+
+    private void NewRole()
+    {
+        var nextSort = (roles is { Count: > 0 } ? roles.Max(r => r.SortOrder) : 0) + 1;
+        editing = new RoleEditModel { SortOrder = nextSort };
+        errorMessage = null;
+        showEditor = true;
+    }
+
+    private void EditRole(RoleAdminDto role)
+    {
+        editing = new RoleEditModel
+        {
+            Id = role.Id,
+            Name = role.Name,
+            SortOrder = role.SortOrder,
+            Rights = role.Rights.ToHashSet(),
+        };
+        errorMessage = null;
+        showEditor = true;
+    }
+
+    private void CancelEdit()
+    {
+        showEditor = false;
+        editing = null;
+        errorMessage = null;
+    }
+
+    private void ToggleRight(OrgRight right, bool on)
+    {
+        if (editing is null) return;
+        if (on) editing.Rights.Add(right);
+        else editing.Rights.Remove(right);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (editing is null) return;
+        errorMessage = null;
+        if (string.IsNullOrWhiteSpace(editing.Name))
+        {
+            errorMessage = "Name is required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var request = new SaveRoleRequest
+            {
+                Name = editing.Name,
+                SortOrder = editing.SortOrder,
+                Rights = editing.Rights.ToList(),
+            };
+            var result = editing.Id == 0
+                ? await Api.CreateRoleAsync(selectedOrgId, request)
+                : await Api.UpdateRoleAsync(selectedOrgId, editing.Id, request);
+
+            if (result.Success)
+            {
+                Snackbar.Add(editing.Id == 0 ? "Role added" : "Role updated", Severity.Success);
+                CancelEdit();
+                await LoadAsync();
+            }
+            else
+            {
+                errorMessage = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(RoleAdminDto role)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete the role \"{role.Name}\"?"))
+        {
+            return;
+        }
+
+        var result = await Api.DeleteRoleAsync(selectedOrgId, role.Id);
+        if (result.Success)
+        {
+            Snackbar.Add("Role deleted", Severity.Success);
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Add(result.Error ?? "Could not delete the role.", Severity.Error);
+        }
+    }
+
+    private async Task ShowMembersAsync(RoleAdminDto role)
+    {
+        var parameters = new DialogParameters<RoleMembersDialog>
+        {
+            { x => x.OrgId, selectedOrgId },
+            { x => x.RoleId, role.Id },
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
+        await DialogService.ShowAsync<RoleMembersDialog>($"Members of {role.Name}", parameters, options);
+    }
+
+    private async Task GuardAsync(Func<Task> action)
+    {
+        try
+        {
+            loadError = null;
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex.Message;
+        }
+        catch (Exception)
+        {
+            loadError = "Something went wrong loading roles. Please retry.";
+        }
+    }
+
+    private sealed class RoleEditModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public int SortOrder { get; set; }
+        public HashSet<OrgRight> Rights { get; set; } = new();
+    }
+}

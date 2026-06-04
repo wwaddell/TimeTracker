@@ -99,5 +99,9 @@ app.UseAuthorization();
 app.MapTimeTrackerEndpoints();
 app.MapTaskEndpoints();
 app.MapAdminEndpoints();
+app.MapRightsEndpoints();
+app.MapOrganizationEndpoints();
+app.MapMemberEndpoints();
+app.MapRoleEndpoints();
 
 app.Run();

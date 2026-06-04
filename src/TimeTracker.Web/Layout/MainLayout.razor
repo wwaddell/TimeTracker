@@ -24,7 +24,12 @@
         <MudNavMenu>
             <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Schedule">Log Time</MudNavLink>
             <MudNavLink Href="tasks" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Checklist">Tasks</MudNavLink>
-            <MudNavLink Href="admin" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">Manage Fields</MudNavLink>
+            <MudNavGroup Title="Administration" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="true">
+                <MudNavLink Href="admin/organization" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Business">Organization</MudNavLink>
+                <MudNavLink Href="admin/users" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">Users</MudNavLink>
+                <MudNavLink Href="admin/roles" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Badge">Roles</MudNavLink>
+                <MudNavLink Href="admin" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Tune">Fields</MudNavLink>
+            </MudNavGroup>
         </MudNavMenu>
     </MudDrawer>
 
