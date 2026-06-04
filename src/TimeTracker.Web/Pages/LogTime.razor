@@ -7,6 +7,8 @@
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@implements IDisposable
 
 <PageTitle>Log Time</PageTitle>
 
@@ -49,7 +51,7 @@ else
             <MudTextField T="string" @bind-Value="quickNote" Immediate="true" Margin="Margin.Dense"
                           Lines="2" AutoGrow="true" MaxLines="8"
                           Placeholder="Quick add — just a note…" Variant="Variant.Outlined"
-                          Class="flex-grow-1" OnKeyDown="QuickKeyDown" />
+                          Class="flex-grow-1" />
             <MudTooltip Text="Quick add (note only)">
                 <MudIconButton Icon="@Icons.Material.Filled.Bolt" Color="Color.Primary"
                                OnClick="QuickAddAsync"
@@ -61,8 +63,8 @@ else
             </MudTooltip>
         </MudStack>
         <MudText Typo="Typo.caption" Class="mt-2 mud-text-secondary">
-            Press Enter or <MudIcon Icon="@Icons.Material.Filled.Bolt" Size="Size.Small" /> to log the note instantly;
-            use <MudIcon Icon="@Icons.Material.Filled.PostAdd" Size="Size.Small" /> to fill in all the details.
+            Press Enter or <MudIcon Icon="@Icons.Material.Filled.Bolt" Size="Size.Small" /> to log instantly
+            (Shift+Enter for a new line); use <MudIcon Icon="@Icons.Material.Filled.PostAdd" Size="Size.Small" /> to fill in all the details.
         </MudText>
     </MudPaper>
 
@@ -149,7 +151,33 @@ else
 
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(total / (double)PageSize));
 
-    protected override Task OnInitializedAsync() => ReloadAllAsync();
+    private DotNetObjectReference<LogTime>? _selfRef;
+    private bool _quickEnterBound;
+
+    protected override Task OnInitializedAsync()
+    {
+        _selfRef = DotNetObjectReference.Create(this);
+        return ReloadAllAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Bind the Enter-to-submit / Shift+Enter-newline handler once the quick-add box exists.
+        if (!_quickEnterBound && organizations is { Count: > 0 } && _selfRef is not null)
+        {
+            var bound = await JS.InvokeAsync<bool>("ttQuickAdd.bind", "textarea[placeholder^='Quick add']", _selfRef);
+            _quickEnterBound = bound;
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnQuickEnter()
+    {
+        await QuickAddAsync();
+        StateHasChanged();
+    }
+
+    public void Dispose() => _selfRef?.Dispose();
 
     private Task ReloadAllAsync() => GuardAsync(async () =>
     {
@@ -214,14 +242,6 @@ else
     {
         page = newPage;
         await GuardAsync(LoadEntriesAsync);
-    }
-
-    private async Task QuickKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-        {
-            await QuickAddAsync();
-        }
     }
 
     private async Task QuickAddAsync()

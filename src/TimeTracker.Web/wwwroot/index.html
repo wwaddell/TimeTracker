@@ -31,6 +31,25 @@
     </div>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script>
+        // Enter submits the quick-add note; Shift/Ctrl/Alt+Enter inserts a newline instead.
+        window.ttQuickAdd = {
+            bind: function (selector, dotNetRef) {
+                const el = document.querySelector(selector);
+                if (!el || el.dataset.ttBound) {
+                    return false;
+                }
+                el.dataset.ttBound = '1';
+                el.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+                        e.preventDefault();
+                        dotNetRef.invokeMethodAsync('OnQuickEnter');
+                    }
+                });
+                return true;
+            }
+        };
+    </script>
 </body>
 
 </html>
