@@ -3,7 +3,7 @@
 @using TimeTracker.Domain.Enums
 @using TimeTracker.Web.Models
 
-<MudTextField T="string" Label="Note" @bind-Value="Model.Note" Lines="2"
+<MudTextField T="string" Label="Note" @bind-Value="Model.Note" Lines="2" AutoGrow="true" MaxLines="12"
               Required="true" Immediate="true" Variant="Variant.Outlined" Class="mb-3"
               Placeholder="What did you work on?" />
 
