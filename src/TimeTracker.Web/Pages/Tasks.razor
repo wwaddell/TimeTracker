@@ -3,6 +3,7 @@
 @using TimeTracker.Contracts.Tasks
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
 @inject IJSRuntime JS
+@inject ISnackbar Snackbar
 
 <PageTitle>Tasks</PageTitle>
 
@@ -92,10 +93,14 @@ else
                     }
                 </MudTd>
                 <MudTd Style="text-align:right; white-space:nowrap">
-                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                                   OnClick="@(() => EditTask(context))" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
-                                   OnClick="@(() => DeleteAsync(context))" />
+                    <MudTooltip Text="Edit">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                       OnClick="@(() => EditTask(context))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Delete">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                       OnClick="@(() => DeleteAsync(context))" />
+                    </MudTooltip>
                 </MudTd>
             </RowTemplate>
         </MudTable>
@@ -187,6 +192,7 @@ else
 
             if (result.Success)
             {
+                Snackbar.Add(editing.Id == 0 ? "Task added" : "Task updated", Severity.Success);
                 CancelEdit();
                 await LoadAsync();
             }
@@ -221,6 +227,7 @@ else
         }
 
         await Api.DeleteTaskAsync(selectedOrgId, task.Id);
+        Snackbar.Add("Task deleted", Severity.Success);
         await LoadAsync();
     }
 

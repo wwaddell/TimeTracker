@@ -3,6 +3,7 @@
 @using TimeTracker.Web.Models
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
 @inject IJSRuntime JS
+@inject ISnackbar Snackbar
 
 <MudDialog>
     <DialogContent>
@@ -70,6 +71,7 @@
 
             if (result.Success)
             {
+                Snackbar.Add(Entry is null ? "Entry added" : "Entry updated", Severity.Success);
                 MudDialog.Close(DialogResult.Ok(true));
             }
             else
@@ -101,6 +103,7 @@
             var result = await Api.DeleteTimeEntryAsync(OrgId, Entry.Id);
             if (result.Success)
             {
+                Snackbar.Add("Entry deleted", Severity.Success);
                 MudDialog.Close(DialogResult.Ok(true));
             }
             else

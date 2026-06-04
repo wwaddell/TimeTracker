@@ -5,6 +5,7 @@
 @using TimeTracker.Web.Components
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
 @inject IDialogService DialogService
+@inject ISnackbar Snackbar
 
 <PageTitle>Log Time</PageTitle>
 
@@ -28,20 +29,24 @@ else
         }
     </MudSelect>
 
-    <MudPaper Class="pa-4 mb-6" Elevation="1">
-        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-            <MudTextField T="string" @bind-Value="quickNote" Immediate="true"
+    <MudPaper Class="pa-3 mb-6" Elevation="1">
+        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+            <MudTextField T="string" @bind-Value="quickNote" Immediate="true" Margin="Margin.Dense"
                           Placeholder="Quick add — just a note…" Variant="Variant.Outlined"
                           Class="flex-grow-1" OnKeyDown="QuickKeyDown" />
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="QuickAddAsync"
-                       Disabled="@(quickAdding || string.IsNullOrWhiteSpace(quickNote))">
-                @(quickAdding ? "Adding…" : "Quick add")
-            </MudButton>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="OpenAdd">Add</MudButton>
+            <MudTooltip Text="Quick add (note only)">
+                <MudIconButton Icon="@Icons.Material.Filled.Bolt" Color="Color.Primary"
+                               OnClick="QuickAddAsync"
+                               Disabled="@(quickAdding || string.IsNullOrWhiteSpace(quickNote))" />
+            </MudTooltip>
+            <MudTooltip Text="Add detailed entry">
+                <MudIconButton Icon="@Icons.Material.Filled.PostAdd" Color="Color.Primary"
+                               Variant="Variant.Filled" OnClick="OpenAdd" />
+            </MudTooltip>
         </MudStack>
-        <MudText Typo="Typo.caption" Class="mt-2">
-            Quick add logs just the note now — rows still missing required fields are flagged so you can finish them later.
+        <MudText Typo="Typo.caption" Class="mt-2 mud-text-secondary">
+            Press Enter or <MudIcon Icon="@Icons.Material.Filled.Bolt" Size="Size.Small" /> to log the note instantly;
+            use <MudIcon Icon="@Icons.Material.Filled.PostAdd" Size="Size.Small" /> to fill in all the details.
         </MudText>
     </MudPaper>
 
@@ -188,6 +193,11 @@ else
                 quickNote = string.Empty;
                 page = 1;
                 await LoadEntriesAsync();
+                Snackbar.Add("Entry logged", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add(result.Error ?? "Could not log the entry.", Severity.Error);
             }
         }
         finally

@@ -4,6 +4,7 @@
 @using TimeTracker.Domain.Enums
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
 @inject IJSRuntime JS
+@inject ISnackbar Snackbar
 
 <PageTitle>Manage Fields</PageTitle>
 
@@ -149,8 +150,12 @@ else
                 <MudTd>@(context.IsActive ? "Yes" : "No")</MudTd>
                 <MudTd>@context.SortOrder</MudTd>
                 <MudTd Style="text-align:right; white-space:nowrap">
-                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditField(context))" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteFieldAsync(context))" />
+                    <MudTooltip Text="Edit">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditField(context))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Delete">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteFieldAsync(context))" />
+                    </MudTooltip>
                 </MudTd>
             </RowTemplate>
         </MudTable>
@@ -262,6 +267,7 @@ else
 
             if (result.Success)
             {
+                Snackbar.Add(editing.Id == 0 ? "Field added" : "Field updated", Severity.Success);
                 CancelEdit();
                 await LoadAsync();
             }
@@ -284,7 +290,7 @@ else
         }
 
         var result = await Api.DeleteFieldAsync(selectedOrgId, f.Id);
-        infoMessage = result.Message;
+        Snackbar.Add(result.Message, result.Deactivated ? Severity.Warning : Severity.Success);
         await LoadAsync();
     }
 

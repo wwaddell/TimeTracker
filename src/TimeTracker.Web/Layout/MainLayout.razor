@@ -1,5 +1,6 @@
 @inherits LayoutComponentBase
 @using TimeTracker.Web.Theme
+@inject IJSRuntime JS
 
 <MudThemeProvider @ref="_themeProvider" @bind-IsDarkMode="_isDarkMode" Theme="AppTheme.Instance" />
 <MudPopoverProvider />
@@ -10,10 +11,12 @@
     <MudAppBar Elevation="1">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
                        OnClick="@ToggleDrawer" />
+        <MudIcon Icon="@Icons.Material.Filled.AccessTimeFilled" Class="mr-2" />
         <MudText Typo="Typo.h6">TimeTracker</MudText>
         <MudSpacer />
-        <MudIconButton Icon="@DarkModeIcon" Color="Color.Inherit" OnClick="@ToggleDarkMode"
-                       Title="Toggle light/dark" />
+        <MudTooltip Text="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")">
+            <MudIconButton Icon="@DarkModeIcon" Color="Color.Inherit" OnClick="@ToggleDarkMode" />
+        </MudTooltip>
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen" Elevation="1" ClipMode="DrawerClipMode.Always" Variant="@DrawerVariant.Responsive">
@@ -32,6 +35,8 @@
 </MudLayout>
 
 @code {
+    private const string DarkModeKey = "tt-dark-mode";
+
     private MudThemeProvider _themeProvider = default!;
     private bool _drawerOpen = true;
     private bool _isDarkMode;
@@ -43,12 +48,23 @@
     {
         if (firstRender)
         {
-            _isDarkMode = await _themeProvider.GetSystemDarkModeAsync();
+            // Restore the saved preference, falling back to the OS setting.
+            var stored = await JS.InvokeAsync<string?>("localStorage.getItem", DarkModeKey);
+            _isDarkMode = stored switch
+            {
+                "true" => true,
+                "false" => false,
+                _ => await _themeProvider.GetSystemDarkModeAsync(),
+            };
             StateHasChanged();
         }
     }
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 
-    private void ToggleDarkMode() => _isDarkMode = !_isDarkMode;
+    private async Task ToggleDarkMode()
+    {
+        _isDarkMode = !_isDarkMode;
+        await JS.InvokeVoidAsync("localStorage.setItem", DarkModeKey, _isDarkMode ? "true" : "false");
+    }
 }
