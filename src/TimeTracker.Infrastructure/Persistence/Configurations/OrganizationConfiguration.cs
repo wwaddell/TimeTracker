@@ -13,6 +13,7 @@ public class OrganizationConfiguration : IEntityTypeConfiguration<Organization>
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Description).HasMaxLength(1000);
         builder.Property(x => x.IsActive).HasDefaultValue(true);
+        builder.Property(x => x.RequireTime).HasDefaultValue(true);
         builder.HasIndex(x => x.Name);
     }
 }

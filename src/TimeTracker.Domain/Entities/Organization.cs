@@ -8,6 +8,9 @@ public class Organization : AuditableEntity
     public string? Description { get; set; }
     public bool IsActive { get; set; } = true;
 
+    /// <summary>When true, entries capture a start time; when false, date-only (time hidden).</summary>
+    public bool RequireTime { get; set; } = true;
+
     public ICollection<OrganizationRole> Roles { get; set; } = new List<OrganizationRole>();
     public ICollection<UserOrganization> Members { get; set; } = new List<UserOrganization>();
     public ICollection<TimeEntryField> TimeEntryFields { get; set; } = new List<TimeEntryField>();

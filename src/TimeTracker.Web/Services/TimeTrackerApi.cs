@@ -96,6 +96,9 @@ public class TimeTrackerApi(HttpClient http)
     public async Task<ApiResult> SaveOrgDetailsAsync(int orgId, SaveOrganizationRequest request) =>
         await SendAsync(() => http.PutAsJsonAsync($"/api/organizations/{orgId}/details", request));
 
+    public async Task<ApiResult> SaveEntrySettingsAsync(int orgId, EntrySettingsRequest request) =>
+        await SendAsync(() => http.PutAsJsonAsync($"/api/organizations/{orgId}/entry-settings", request));
+
     public async Task<IReadOnlyList<MemberDto>> GetMembersAsync(int orgId) =>
         await GetAsync<List<MemberDto>>($"/api/organizations/{orgId}/members") ?? [];
 

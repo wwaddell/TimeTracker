@@ -10,3 +10,9 @@ public record SaveOrganizationRequest
     public string? Description { get; init; }
     public bool IsActive { get; init; } = true;
 }
+
+/// <summary>Entry-form settings configured on the Fields screen.</summary>
+public record EntrySettingsRequest
+{
+    public bool RequireTime { get; init; } = true;
+}

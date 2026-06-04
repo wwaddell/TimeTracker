@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TimeTracker.Api.Auth;
 using TimeTracker.Contracts.Admin;
+using TimeTracker.Contracts.Organizations;
 using TimeTracker.Domain.Entities;
 using TimeTracker.Domain.Enums;
 using TimeTracker.Infrastructure.Persistence;
@@ -29,6 +30,27 @@ public static class AdminEndpoints
                 .ToListAsync();
 
             return Results.Ok(roles);
+        });
+
+        // Entry-form settings (e.g. whether a start time is captured). ManageFields right.
+        admin.MapPut("/api/organizations/{orgId:int}/entry-settings",
+            async (int orgId, EntrySettingsRequest req, TimeTrackerDbContext db, ICurrentUser currentUser) =>
+        {
+            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageFields))
+            {
+                return Results.Forbid();
+            }
+
+            var org = await db.Organizations.FirstOrDefaultAsync(o => o.Id == orgId);
+            if (org is null)
+            {
+                return Results.NotFound();
+            }
+
+            org.RequireTime = req.RequireTime;
+            org.ModifiedUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { org.Id, org.RequireTime });
         });
 
         // All configurable fields for the org (including inactive, all roles).

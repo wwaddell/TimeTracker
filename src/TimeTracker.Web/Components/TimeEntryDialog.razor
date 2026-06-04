@@ -7,7 +7,7 @@
 
 <MudDialog>
     <DialogContent>
-        <TimeEntryFields Model="model" Fields="Fields" Tasks="Tasks" />
+        <TimeEntryFields Model="model" Fields="Fields" Tasks="Tasks" RequireTime="RequireTime" />
         @if (Entry is not null && MissingRequired() is { Count: > 0 } missing)
         {
             <MudAlert Severity="Severity.Info" Class="mt-3" Dense="true">
@@ -38,6 +38,7 @@
     [Parameter] public IReadOnlyList<EntryFieldDto> Fields { get; set; } = [];
     [Parameter] public IReadOnlyList<TaskDto>? Tasks { get; set; }
     [Parameter] public TimeEntryDto? Entry { get; set; }
+    [Parameter] public bool RequireTime { get; set; } = true;
 
     private TimeEntryModel model = new();
     private bool saving;

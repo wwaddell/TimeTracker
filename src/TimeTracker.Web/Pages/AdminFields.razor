@@ -1,5 +1,6 @@
 @page "/admin"
 @using TimeTracker.Contracts.Admin
+@using TimeTracker.Contracts.Organizations
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Domain.Enums
 @using TimeTracker.Web.Services
@@ -48,6 +49,14 @@ else
         <MudAlert Severity="Severity.Info" Class="mb-3" ShowCloseIcon="true"
                   CloseIconClicked="@(() => infoMessage = null)">@infoMessage</MudAlert>
     }
+
+    <MudPaper Class="pa-3 mb-4" Elevation="1">
+        <MudSwitch T="bool" Value="requireTime" ValueChanged="OnRequireTimeChanged" Color="Color.Primary"
+                   Label="Require a start time on entries" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+            When off, entries capture the date only — the time field is hidden and time isn't shown in the list.
+        </MudText>
+    </MudPaper>
 
     <div class="d-flex justify-space-between align-center mb-3">
         <MudText Typo="Typo.h5">Configurable fields</MudText>
@@ -182,6 +191,7 @@ else
     private IReadOnlyList<OrganizationRoleDto>? roles;
     private IReadOnlyList<EntryFieldAdminDto>? fields;
     private int selectedOrgId;
+    private bool requireTime = true;
 
     private FieldEditModel? editing;
     private bool showEditor;
@@ -215,8 +225,25 @@ else
 
     private async Task LoadAsync()
     {
+        requireTime = organizations?.FirstOrDefault(o => o.Id == selectedOrgId)?.RequireTime ?? true;
         roles = await Api.GetRolesAsync(selectedOrgId);
         fields = await Api.GetAdminFieldsAsync(selectedOrgId);
+    }
+
+    private async Task OnRequireTimeChanged(bool value)
+    {
+        requireTime = value;
+        var result = await Api.SaveEntrySettingsAsync(selectedOrgId, new EntrySettingsRequest { RequireTime = value });
+        if (result.Success)
+        {
+            Snackbar.Add(value ? "Start time is now required" : "Entries are now date-only", Severity.Success);
+            organizations = await Api.GetOrganizationsAsync(); // refresh cached RequireTime
+        }
+        else
+        {
+            requireTime = !value; // revert on failure
+            Snackbar.Add(result.Error ?? "Could not update the setting.", Severity.Error);
+        }
     }
 
     private async Task GuardAsync(Func<Task> action)

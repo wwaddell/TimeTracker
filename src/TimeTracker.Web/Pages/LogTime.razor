@@ -91,7 +91,7 @@ else
                         <div class="d-flex align-center flex-none" style="gap:.25rem">
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">
                                 @entry.EntryDate.ToString("yyyy-MM-dd")
-                                @(entry.StartTime is { } t ? t.ToString("HH:mm") : "")
+                                @(OrgRequiresTime && entry.StartTime is { } t ? t.ToString("HH:mm") : "")
                                 @(entry.DurationMinutes is { } d ? $"· {d} min" : "")
                             </MudText>
                             @if (missing.Count > 0)
@@ -150,6 +150,9 @@ else
     private string? loadError;
 
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(total / (double)PageSize));
+
+    private bool OrgRequiresTime =>
+        organizations?.FirstOrDefault(o => o.Id == selectedOrgId)?.RequireTime ?? true;
 
     private DotNetObjectReference<LogTime>? _selfRef;
     private bool _quickEnterBound;
@@ -258,7 +261,7 @@ else
             {
                 Note = quickNote.Trim(),
                 EntryDate = DateOnly.FromDateTime(DateTime.Now),
-                StartTime = TimeOnly.FromDateTime(DateTime.Now),
+                StartTime = OrgRequiresTime ? TimeOnly.FromDateTime(DateTime.Now) : null,
             };
             var result = await Api.CreateTimeEntryAsync(selectedOrgId, request);
             if (result.Success)
@@ -291,6 +294,7 @@ else
             { x => x.Fields, fields ?? [] },
             { x => x.Tasks, tasks },
             { x => x.Entry, entry },
+            { x => x.RequireTime, OrgRequiresTime },
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
         var dialog = await DialogService.ShowAsync<TimeEntryDialog>(

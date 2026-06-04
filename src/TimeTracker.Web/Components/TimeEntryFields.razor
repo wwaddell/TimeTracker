@@ -8,13 +8,16 @@
               Placeholder="What did you work on?" />
 
 <MudGrid>
-    <MudItem xs="12" sm="4">
+    <MudItem xs="12" sm="@(RequireTime ? 4 : 6)">
         <MudDatePicker Label="Date" @bind-Date="DateProxy" Variant="Variant.Outlined" />
     </MudItem>
-    <MudItem xs="12" sm="4">
-        <MudTimePicker Label="Start time" @bind-Time="TimeProxy" Variant="Variant.Outlined" />
-    </MudItem>
-    <MudItem xs="12" sm="4">
+    @if (RequireTime)
+    {
+        <MudItem xs="12" sm="4">
+            <MudTimePicker Label="Start time" @bind-Time="TimeProxy" Variant="Variant.Outlined" />
+        </MudItem>
+    }
+    <MudItem xs="12" sm="@(RequireTime ? 4 : 6)">
         <MudNumericField T="int?" Label="Duration (min)" @bind-Value="Model.DurationMinutes"
                          Min="0" Variant="Variant.Outlined" />
     </MudItem>
@@ -92,6 +95,17 @@
     [Parameter, EditorRequired] public TimeEntryModel Model { get; set; } = default!;
     [Parameter] public IReadOnlyList<EntryFieldDto> Fields { get; set; } = [];
     [Parameter] public IReadOnlyList<TaskDto>? Tasks { get; set; }
+
+    /// <summary>When false, the org captures date only — the time field is hidden and cleared.</summary>
+    [Parameter] public bool RequireTime { get; set; } = true;
+
+    protected override void OnParametersSet()
+    {
+        if (!RequireTime)
+        {
+            Model.StartTime = null;
+        }
+    }
 
     // MudDatePicker/MudTimePicker work in DateTime?/TimeSpan?; map to the model's DateOnly/TimeOnly.
     private DateTime? DateProxy
