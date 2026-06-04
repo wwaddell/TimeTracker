@@ -28,14 +28,15 @@ lookup tables `t_type_*`.
 ## Prerequisites
 
 - .NET SDK **10.0.300** (pinned in `global.json`)
-- SQL Server LocalDB for local development
+- SQL Server (local default instance `localhost`) — SQL Server 2025 Developer is used in dev
 
 ## Database
 
-The design-time connection defaults to LocalDB
-(`Server=(localdb)\MSSQLLocalDB;Database=TimeTracker;...`). Override with the
+The dev connection string is set in `appsettings.Development.json`
+(`Server=localhost;Database=TimeTracker;Trusted_Connection=True;TrustServerCertificate=True;`).
+The design-time/default also targets `localhost`. Override with the
 `TIMETRACKER_CONNECTION` environment variable, or the `TimeTracker` connection
-string when hosted.
+string when hosted. The database is created and seeded automatically on first API run.
 
 ```pwsh
 # Apply migrations to the local database
