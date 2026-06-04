@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
+@using TimeTracker.Web.Theme
 
-<MudThemeProvider @ref="_themeProvider" @bind-IsDarkMode="_isDarkMode" />
+<MudThemeProvider @ref="_themeProvider" @bind-IsDarkMode="_isDarkMode" Theme="AppTheme.Instance" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
