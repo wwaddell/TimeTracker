@@ -3,141 +3,99 @@
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Contracts.Tasks
 @using TimeTracker.Web.Components
-@using TimeTracker.Web.Models
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
-@inject IJSRuntime JS
+@inject IDialogService DialogService
 
 <PageTitle>Log Time</PageTitle>
 
 @if (organizations is null)
 {
-    <p><em>Loading…</em></p>
+    <MudProgressLinear Indeterminate="true" />
 }
 else if (organizations.Count == 0)
 {
-    <div class="alert alert-warning">No organizations available for your account.</div>
+    <MudAlert Severity="Severity.Warning">No organizations available for your account.</MudAlert>
 }
 else
 {
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <label class="form-label">Organization</label>
-            <select class="form-select" @onchange="OnOrgChanged">
-                @foreach (var org in organizations)
-                {
-                    <option value="@org.Id" selected="@(org.Id == selectedOrgId)">
-                        @org.Name@(org.RoleName is null ? "" : $" — {org.RoleName}")
-                    </option>
-                }
-            </select>
-        </div>
-    </div>
+    <MudSelect T="int" Label="Organization" Value="selectedOrgId" ValueChanged="OnOrgChanged"
+               Variant="Variant.Outlined" Class="mb-4" Style="max-width:420px">
+        @foreach (var org in organizations)
+        {
+            <MudSelectItem T="int" Value="@org.Id">
+                @org.Name@(org.RoleName is null ? "" : $" — {org.RoleName}")
+            </MudSelectItem>
+        }
+    </MudSelect>
 
-    <div class="card mb-3">
-        <div class="card-body">
-            <div class="input-group">
-                <input class="form-control" placeholder="Quick add — just a note…"
-                       @bind="quickNote" @bind:event="oninput" @onkeydown="QuickKeyDown" />
-                <button class="btn btn-outline-primary" @onclick="QuickAddAsync"
-                        disabled="@(quickAdding || string.IsNullOrWhiteSpace(quickNote))">
-                    @(quickAdding ? "Adding…" : "Quick add")
-                </button>
-                <button class="btn btn-primary" @onclick="OpenAdd">Add…</button>
-            </div>
-            <div class="form-text">
-                Quick add logs just the note now — rows still missing required fields are flagged so you can finish them later.
-            </div>
-        </div>
-    </div>
+    <MudPaper Class="pa-4 mb-6" Elevation="1">
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+            <MudTextField T="string" @bind-Value="quickNote" Immediate="true"
+                          Placeholder="Quick add — just a note…" Variant="Variant.Outlined"
+                          Class="flex-grow-1" OnKeyDown="QuickKeyDown" />
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="QuickAddAsync"
+                       Disabled="@(quickAdding || string.IsNullOrWhiteSpace(quickNote))">
+                @(quickAdding ? "Adding…" : "Quick add")
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OpenAdd">Add</MudButton>
+        </MudStack>
+        <MudText Typo="Typo.caption" Class="mt-2">
+            Quick add logs just the note now — rows still missing required fields are flagged so you can finish them later.
+        </MudText>
+    </MudPaper>
 
-    <h2 class="h4 mb-3">Recent entries</h2>
+    <MudText Typo="Typo.h5" Class="mb-3">Recent entries</MudText>
+
     @if (entries is null)
     {
-        <p><em>Loading…</em></p>
+        <MudProgressLinear Indeterminate="true" />
     }
     else if (entries.Count == 0)
     {
-        <p class="text-muted">No entries yet — use Quick add or Add above.</p>
+        <MudText Class="mud-text-secondary">No entries yet — use Quick add or Add above.</MudText>
     }
     else
     {
-        <div class="list-group">
+        <MudStack Spacing="2">
             @foreach (var entry in entries)
             {
-                <button type="button" class="list-group-item list-group-item-action" @onclick="() => OpenEdit(entry)">
-                    <div class="d-flex justify-content-between">
-                        <strong>
-                            @entry.Note
-                            @if (MissingLabels(entry) is { Count: > 0 } missing)
-                            {
-                                <span class="badge bg-warning text-dark ms-2"
-                                      title="@($"Missing required: {string.Join(", ", missing)}")">⚠ Incomplete</span>
-                            }
-                        </strong>
-                        <small class="text-muted">
+                var missing = MissingLabels(entry);
+                <MudPaper Class="pa-3" Elevation="1" Style="cursor:pointer"
+                          @onclick="@(() => OpenEdit(entry))">
+                    <div class="d-flex justify-space-between align-center">
+                        <MudText Typo="Typo.subtitle1"><b>@entry.Note</b></MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
                             @entry.EntryDate.ToString("yyyy-MM-dd")
                             @(entry.StartTime is { } t ? t.ToString("HH:mm") : "")
                             @(entry.DurationMinutes is { } d ? $"· {d} min" : "")
-                        </small>
+                        </MudText>
                     </div>
-                    @if (entry.TaskTitle is not null || entry.Attributes.Any(a => !string.IsNullOrWhiteSpace(a.Value)))
-                    {
-                        <div class="mt-1">
-                            @if (entry.TaskTitle is not null)
-                            {
-                                <span class="badge bg-info text-dark me-1">Task: @entry.TaskTitle</span>
-                            }
-                            @foreach (var attr in entry.Attributes.Where(a => !string.IsNullOrWhiteSpace(a.Value)))
-                            {
-                                <span class="badge bg-secondary me-1">@attr.Label: @attr.Value</span>
-                            }
-                        </div>
-                    }
-                </button>
+                    <MudChipSet T="string" Class="mt-1" ReadOnly="true">
+                        @if (missing.Count > 0)
+                        {
+                            <MudChip T="string" Color="Color.Warning" Size="Size.Small"
+                                     Icon="@Icons.Material.Filled.Warning"
+                                     title="@($"Missing required: {string.Join(", ", missing)}")">Incomplete</MudChip>
+                        }
+                        @if (entry.TaskTitle is not null)
+                        {
+                            <MudChip T="string" Color="Color.Info" Size="Size.Small">Task: @entry.TaskTitle</MudChip>
+                        }
+                        @foreach (var attr in entry.Attributes.Where(a => !string.IsNullOrWhiteSpace(a.Value)))
+                        {
+                            <MudChip T="string" Size="Size.Small">@attr.Label: @attr.Value</MudChip>
+                        }
+                    </MudChipSet>
+                </MudPaper>
             }
-        </div>
+        </MudStack>
 
-        <div class="d-flex justify-content-between align-items-center mt-3">
-            <small class="text-muted">@total @(total == 1 ? "entry" : "entries")</small>
-            <div class="btn-group">
-                <button class="btn btn-sm btn-outline-secondary" @onclick="PrevPage" disabled="@(page <= 1)">‹ Prev</button>
-                <span class="btn btn-sm disabled">Page @(page) of @TotalPages</span>
-                <button class="btn btn-sm btn-outline-secondary" @onclick="NextPage" disabled="@(page >= TotalPages)">Next ›</button>
-            </div>
+        <div class="d-flex justify-space-between align-center mt-4">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@total @(total == 1 ? "entry" : "entries")</MudText>
+            <MudPagination Count="@TotalPages" Selected="page" SelectedChanged="OnPageChanged" Color="Color.Primary" />
         </div>
     }
-}
-
-@if (dialogOpen && dialogModel is not null)
-{
-    <div class="modal show d-block" tabindex="-1">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">@(dialogEntryId is null ? "Add entry" : "Edit entry")</h5>
-                    <button type="button" class="btn-close" @onclick="CloseDialog"></button>
-                </div>
-                <div class="modal-body">
-                    <TimeEntryFields Model="dialogModel" Fields="fields ?? []" Tasks="tasks" />
-                    @if (dialogError is not null)
-                    {
-                        <div class="alert alert-danger mt-3 mb-0">@dialogError</div>
-                    }
-                </div>
-                <div class="modal-footer">
-                    @if (dialogEntryId is not null)
-                    {
-                        <button class="btn btn-outline-danger me-auto" @onclick="DeleteDialogAsync" disabled="@dialogSaving">Delete</button>
-                    }
-                    <button class="btn btn-link" @onclick="CloseDialog">Cancel</button>
-                    <button class="btn btn-primary" @onclick="SaveDialogAsync" disabled="@dialogSaving">
-                        @(dialogSaving ? "Saving…" : "Save")
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="modal-backdrop show"></div>
 }
 
 @code {
@@ -154,12 +112,6 @@ else
     private string quickNote = string.Empty;
     private bool quickAdding;
 
-    private bool dialogOpen;
-    private long? dialogEntryId;
-    private TimeEntryModel? dialogModel;
-    private bool dialogSaving;
-    private string? dialogError;
-
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(total / (double)PageSize));
 
     protected override async Task OnInitializedAsync()
@@ -172,9 +124,9 @@ else
         }
     }
 
-    private async Task OnOrgChanged(ChangeEventArgs e)
+    private async Task OnOrgChanged(int orgId)
     {
-        selectedOrgId = int.Parse(e.Value!.ToString()!);
+        selectedOrgId = orgId;
         page = 1;
         await LoadOrgDataAsync();
     }
@@ -200,14 +152,10 @@ else
         }
     }
 
-    private async Task PrevPage()
+    private async Task OnPageChanged(int newPage)
     {
-        if (page > 1) { page--; await LoadEntriesAsync(); }
-    }
-
-    private async Task NextPage()
-    {
-        if (page < TotalPages) { page++; await LoadEntriesAsync(); }
+        page = newPage;
+        await LoadEntriesAsync();
     }
 
     private async Task QuickKeyDown(KeyboardEventArgs e)
@@ -248,109 +196,30 @@ else
         }
     }
 
-    private void OpenAdd()
-    {
-        dialogEntryId = null;
-        dialogModel = new TimeEntryModel();
-        dialogError = null;
-        dialogOpen = true;
-    }
+    private Task OpenAdd() => ShowDialogAsync(null);
 
-    private void OpenEdit(TimeEntryDto entry)
+    private Task OpenEdit(TimeEntryDto entry) => ShowDialogAsync(entry);
+
+    private async Task ShowDialogAsync(TimeEntryDto? entry)
     {
-        dialogEntryId = entry.Id;
-        dialogModel = new TimeEntryModel
+        var parameters = new DialogParameters<TimeEntryDialog>
         {
-            Note = entry.Note,
-            EntryDate = entry.EntryDate,
-            StartTime = entry.StartTime,
-            DurationMinutes = entry.DurationMinutes,
-            TaskId = entry.TaskId,
-            Attributes = entry.Attributes.ToDictionary(a => a.FieldId, a => a.Value),
+            { x => x.OrgId, selectedOrgId },
+            { x => x.Fields, fields ?? [] },
+            { x => x.Tasks, tasks },
+            { x => x.Entry, entry },
         };
-        dialogError = null;
-        dialogOpen = true;
-    }
-
-    private void CloseDialog()
-    {
-        dialogOpen = false;
-        dialogModel = null;
-        dialogEntryId = null;
-        dialogError = null;
-    }
-
-    private async Task SaveDialogAsync()
-    {
-        if (dialogModel is null)
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<TimeEntryDialog>(
+            entry is null ? "Add entry" : "Edit entry", parameters, options);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
         {
-            return;
-        }
-
-        dialogError = Validate(dialogModel);
-        if (dialogError is not null)
-        {
-            return;
-        }
-
-        dialogSaving = true;
-        try
-        {
-            var request = ToRequest(dialogModel);
-            var result = dialogEntryId is null
-                ? await Api.CreateTimeEntryAsync(selectedOrgId, request)
-                : await Api.UpdateTimeEntryAsync(selectedOrgId, dialogEntryId.Value, request);
-
-            if (result.Success)
-            {
-                if (dialogEntryId is null) { page = 1; }
-                CloseDialog();
-                await LoadEntriesAsync();
-            }
-            else
-            {
-                dialogError = result.Error;
-            }
-        }
-        finally
-        {
-            dialogSaving = false;
+            if (entry is null) { page = 1; }
+            await LoadEntriesAsync();
         }
     }
 
-    private async Task DeleteDialogAsync()
-    {
-        if (dialogEntryId is null)
-        {
-            return;
-        }
-
-        if (!await JS.InvokeAsync<bool>("confirm", "Delete this time entry?"))
-        {
-            return;
-        }
-
-        dialogSaving = true;
-        try
-        {
-            var result = await Api.DeleteTimeEntryAsync(selectedOrgId, dialogEntryId.Value);
-            if (result.Success)
-            {
-                CloseDialog();
-                await LoadEntriesAsync();
-            }
-            else
-            {
-                dialogError = result.Error;
-            }
-        }
-        finally
-        {
-            dialogSaving = false;
-        }
-    }
-
-    // Required fields (for the current org) that this entry hasn't filled in.
     private List<string> MissingLabels(TimeEntryDto entry)
     {
         var filled = entry.Attributes
@@ -362,29 +231,4 @@ else
             .Select(f => f.Label)
             .ToList();
     }
-
-    private string? Validate(TimeEntryModel model)
-    {
-        if (string.IsNullOrWhiteSpace(model.Note))
-        {
-            return "A note is required.";
-        }
-
-        var missing = (fields ?? [])
-            .Where(f => f.IsRequired &&
-                string.IsNullOrWhiteSpace(model.Attributes.TryGetValue(f.Id, out var v) ? v : null))
-            .Select(f => f.Label)
-            .ToList();
-        return missing.Count > 0 ? $"Required: {string.Join(", ", missing)}" : null;
-    }
-
-    private static CreateTimeEntryRequest ToRequest(TimeEntryModel model) => new()
-    {
-        Note = model.Note,
-        EntryDate = model.EntryDate,
-        StartTime = model.StartTime,
-        DurationMinutes = model.DurationMinutes,
-        TaskId = model.TaskId,
-        Attributes = new Dictionary<int, string?>(model.Attributes),
-    };
 }

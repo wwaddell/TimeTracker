@@ -3,90 +3,81 @@
 @using TimeTracker.Domain.Enums
 @using TimeTracker.Web.Models
 
-<div class="mb-3">
-    <label class="form-label">Note <span class="text-danger">*</span></label>
-    <textarea class="form-control" rows="2" placeholder="What did you work on?"
-              @bind="Model.Note" @bind:event="oninput"></textarea>
-</div>
+<MudTextField T="string" Label="Note" @bind-Value="Model.Note" Lines="2"
+              Required="true" Immediate="true" Variant="Variant.Outlined" Class="mb-3"
+              Placeholder="What did you work on?" />
 
-<div class="row g-3 mb-3">
-    <div class="col-sm-4">
-        <label class="form-label">Date</label>
-        <input type="date" class="form-control" @bind="Model.EntryDate" />
-    </div>
-    <div class="col-sm-4">
-        <label class="form-label">Start time</label>
-        <input type="time" class="form-control" @bind="Model.StartTime" />
-    </div>
-    <div class="col-sm-4">
-        <label class="form-label">Duration (min)</label>
-        <input type="number" min="0" class="form-control" @bind="Model.DurationMinutes" />
-    </div>
-</div>
+<MudGrid>
+    <MudItem xs="12" sm="4">
+        <MudDatePicker Label="Date" @bind-Date="DateProxy" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudTimePicker Label="Start time" @bind-Time="TimeProxy" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudNumericField T="int?" Label="Duration (min)" @bind-Value="Model.DurationMinutes"
+                         Min="0" Variant="Variant.Outlined" />
+    </MudItem>
+</MudGrid>
 
 @if (Tasks is { Count: > 0 })
 {
-    <div class="mb-3">
-        <label class="form-label">Task</label>
-        <select class="form-select" @bind="Model.TaskId">
-            <option value="">— none —</option>
-            @foreach (var task in Tasks)
-            {
-                <option value="@task.Id">@task.Title</option>
-            }
-        </select>
-    </div>
+    <MudSelect T="int?" Label="Task" @bind-Value="Model.TaskId" Clearable="true"
+               Variant="Variant.Outlined" Class="mt-3">
+        @foreach (var task in Tasks)
+        {
+            <MudSelectItem T="int?" Value="@((int?)task.Id)">@task.Title</MudSelectItem>
+        }
+    </MudSelect>
 }
 
 @if (Fields is { Count: > 0 })
 {
-    <hr />
-    <div class="row g-3">
+    <MudDivider Class="my-4" />
+    <MudGrid>
         @foreach (var field in Fields)
         {
-            <div class="col-sm-6">
-                <label class="form-label">
-                    @field.Label
-                    @if (field.IsRequired)
-                    {
-                        <span class="text-danger">*</span>
-                    }
-                </label>
+            <MudItem xs="12" sm="6">
                 @switch (field.DataType)
                 {
                     case FieldDataType.Boolean:
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input"
-                                   checked="@IsTrue(field.Id)"
-                                   @onchange="e => OnBoolChanged(field.Id, e)" />
-                        </div>
+                        <MudCheckBox T="bool" Label="@field.Label"
+                                     Value="@IsTrue(field.Id)"
+                                     ValueChanged="@(v => SetValue(field.Id, v ? "true" : "false"))" />
                         break;
                     case FieldDataType.Select:
-                        <select class="form-select"
-                                @onchange="e => SetValue(field.Id, e.Value?.ToString())">
-                            <option value="">— select —</option>
+                        <MudSelect T="string" Label="@field.Label" Required="@field.IsRequired"
+                                   Variant="Variant.Outlined" Clearable="true"
+                                   Value="@GetValue(field.Id)"
+                                   ValueChanged="@(v => SetValue(field.Id, v))">
                             @foreach (var opt in field.Options)
                             {
-                                <option value="@opt.Value" selected="@IsSelected(field.Id, opt.Value)">@opt.Label</option>
+                                <MudSelectItem T="string" Value="@opt.Value">@opt.Label</MudSelectItem>
                             }
-                        </select>
+                        </MudSelect>
                         break;
                     case FieldDataType.Number:
-                        <input type="number" class="form-control" value="@GetValue(field.Id)"
-                               @onchange="e => SetValue(field.Id, e.Value?.ToString())" />
+                        <MudTextField T="string" Label="@field.Label" Required="@field.IsRequired"
+                                      Variant="Variant.Outlined" InputType="InputType.Number"
+                                      Value="@GetValue(field.Id)"
+                                      ValueChanged="@(v => SetValue(field.Id, v))" />
                         break;
                     case FieldDataType.Date:
-                        <input type="date" class="form-control" value="@GetValue(field.Id)"
-                               @onchange="e => SetValue(field.Id, e.Value?.ToString())" />
+                        <MudTextField T="string" Label="@field.Label" Required="@field.IsRequired"
+                                      Variant="Variant.Outlined" InputType="InputType.Date"
+                                      Value="@GetValue(field.Id)"
+                                      ValueChanged="@(v => SetValue(field.Id, v))" />
                         break;
                     default:
-                        <input type="text" class="form-control" value="@GetValue(field.Id)"
-                               @onchange="e => SetValue(field.Id, e.Value?.ToString())" />
+                        <MudTextField T="string" Label="@field.Label" Required="@field.IsRequired"
+                                      Variant="Variant.Outlined"
+                                      Value="@GetValue(field.Id)"
+                                      ValueChanged="@(v => SetValue(field.Id, v))" />
                         break;
                 }
-            </div>
+            </MudItem>
         }
-    </div>
+    </MudGrid>
 }
 
 @code {
@@ -94,19 +85,22 @@
     [Parameter] public IReadOnlyList<EntryFieldDto> Fields { get; set; } = [];
     [Parameter] public IReadOnlyList<TaskDto>? Tasks { get; set; }
 
+    // MudDatePicker/MudTimePicker work in DateTime?/TimeSpan?; map to the model's DateOnly/TimeOnly.
+    private DateTime? DateProxy
+    {
+        get => Model.EntryDate.ToDateTime(TimeOnly.MinValue);
+        set => Model.EntryDate = value is { } d ? DateOnly.FromDateTime(d) : DateOnly.FromDateTime(DateTime.Now);
+    }
+
+    private TimeSpan? TimeProxy
+    {
+        get => Model.StartTime?.ToTimeSpan();
+        set => Model.StartTime = value is { } t ? TimeOnly.FromTimeSpan(t) : null;
+    }
+
     private string? GetValue(int fieldId) => Model.Attributes.TryGetValue(fieldId, out var v) ? v : null;
 
     private void SetValue(int fieldId, string? value) => Model.Attributes[fieldId] = value;
 
     private bool IsTrue(int fieldId) => GetValue(fieldId) == "true";
-
-    private bool IsSelected(int fieldId, string value) => GetValue(fieldId) == value;
-
-    private void OnBoolChanged(int fieldId, ChangeEventArgs e) =>
-        SetValue(fieldId, e.Value is true ? "true" : "false");
-
-    /// <summary>Labels of required fields left blank (for client-side validation).</summary>
-    public IReadOnlyList<string> MissingRequired() =>
-        Fields.Where(f => f.IsRequired && string.IsNullOrWhiteSpace(GetValue(f.Id)))
-              .Select(f => f.Label).ToList();
 }

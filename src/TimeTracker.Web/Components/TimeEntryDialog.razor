@@ -1,0 +1,143 @@
+@using TimeTracker.Contracts.TimeEntries
+@using TimeTracker.Contracts.Tasks
+@using TimeTracker.Web.Models
+@inject TimeTracker.Web.Services.TimeTrackerApi Api
+@inject IJSRuntime JS
+
+<MudDialog>
+    <DialogContent>
+        <TimeEntryFields Model="model" Fields="Fields" Tasks="Tasks" />
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3" Dense="true">@error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (Entry is not null)
+        {
+            <MudButton Color="Color.Error" OnClick="DeleteAsync" Disabled="saving" Class="me-auto">Delete</MudButton>
+        }
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
+            @(saving ? "Saving…" : "Save")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public int OrgId { get; set; }
+    [Parameter] public IReadOnlyList<EntryFieldDto> Fields { get; set; } = [];
+    [Parameter] public IReadOnlyList<TaskDto>? Tasks { get; set; }
+    [Parameter] public TimeEntryDto? Entry { get; set; }
+
+    private TimeEntryModel model = new();
+    private bool saving;
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        if (Entry is { } e)
+        {
+            model = new TimeEntryModel
+            {
+                Note = e.Note,
+                EntryDate = e.EntryDate,
+                StartTime = e.StartTime,
+                DurationMinutes = e.DurationMinutes,
+                TaskId = e.TaskId,
+                Attributes = e.Attributes.ToDictionary(a => a.FieldId, a => a.Value),
+            };
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        error = Validate();
+        if (error is not null)
+        {
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var request = ToRequest();
+            var result = Entry is null
+                ? await Api.CreateTimeEntryAsync(OrgId, request)
+                : await Api.UpdateTimeEntryAsync(OrgId, Entry.Id, request);
+
+            if (result.Success)
+            {
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                error = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (Entry is null)
+        {
+            return;
+        }
+
+        if (!await JS.InvokeAsync<bool>("confirm", "Delete this time entry?"))
+        {
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var result = await Api.DeleteTimeEntryAsync(OrgId, Entry.Id);
+            if (result.Success)
+            {
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                error = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private string? Validate()
+    {
+        if (string.IsNullOrWhiteSpace(model.Note))
+        {
+            return "A note is required.";
+        }
+
+        var missing = Fields
+            .Where(f => f.IsRequired &&
+                string.IsNullOrWhiteSpace(model.Attributes.TryGetValue(f.Id, out var v) ? v : null))
+            .Select(f => f.Label)
+            .ToList();
+        return missing.Count > 0 ? $"Required: {string.Join(", ", missing)}" : null;
+    }
+
+    private CreateTimeEntryRequest ToRequest() => new()
+    {
+        Note = model.Note,
+        EntryDate = model.EntryDate,
+        StartTime = model.StartTime,
+        DurationMinutes = model.DurationMinutes,
+        TaskId = model.TaskId,
+        Attributes = new Dictionary<int, string?>(model.Attributes),
+    };
+}

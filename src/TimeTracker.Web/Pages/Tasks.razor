@@ -8,101 +8,97 @@
 
 @if (organizations is null)
 {
-    <p><em>Loading…</em></p>
+    <MudProgressLinear Indeterminate="true" />
 }
 else if (organizations.Count == 0)
 {
-    <div class="alert alert-warning">No organizations available for your account.</div>
+    <MudAlert Severity="Severity.Warning">No organizations available for your account.</MudAlert>
 }
 else
 {
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <label class="form-label">Organization</label>
-            <select class="form-select" @onchange="OnOrgChanged">
-                @foreach (var org in organizations)
-                {
-                    <option value="@org.Id" selected="@(org.Id == selectedOrgId)">
-                        @org.Name@(org.RoleName is null ? "" : $" — {org.RoleName}")
-                    </option>
-                }
-            </select>
-        </div>
-    </div>
+    <MudSelect T="int" Label="Organization" Value="selectedOrgId" ValueChanged="OnOrgChanged"
+               Variant="Variant.Outlined" Class="mb-4" Style="max-width:420px">
+        @foreach (var org in organizations)
+        {
+            <MudSelectItem T="int" Value="@org.Id">
+                @org.Name@(org.RoleName is null ? "" : $" — {org.RoleName}")
+            </MudSelectItem>
+        }
+    </MudSelect>
 
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <h2 class="h4 mb-0">My tasks</h2>
+    <div class="d-flex justify-space-between align-center mb-3">
+        <MudText Typo="Typo.h5">My tasks</MudText>
         @if (!showEditor)
         {
-            <button class="btn btn-primary btn-sm" @onclick="NewTask">+ Add task</button>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="NewTask">Add task</MudButton>
         }
     </div>
 
     @if (showEditor && editing is not null)
     {
-        <div class="card mb-3">
-            <div class="card-header">@(editing.Id == 0 ? "New task" : "Edit task")</div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label class="form-label">Title <span class="text-danger">*</span></label>
-                    <input class="form-control" @bind="editing.Title" />
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Description</label>
-                    <textarea class="form-control" rows="2" @bind="editing.Description"></textarea>
-                </div>
-                <div class="form-check">
-                    <input type="checkbox" class="form-check-input" id="taskComplete" @bind="editing.IsComplete" />
-                    <label class="form-check-label" for="taskComplete">Complete</label>
-                </div>
+        <MudCard Class="mb-4" Elevation="2">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-2">@(editing.Id == 0 ? "New task" : "Edit task")</MudText>
+                <MudTextField T="string" Label="Title" @bind-Value="editing.Title" Required="true"
+                              Variant="Variant.Outlined" Class="mb-3" />
+                <MudTextField T="string" Label="Description" @bind-Value="editing.Description" Lines="2"
+                              Variant="Variant.Outlined" Class="mb-3" />
+                <MudCheckBox T="bool" Label="Complete" @bind-Value="editing.IsComplete" />
                 @if (errorMessage is not null)
                 {
-                    <div class="alert alert-danger mt-3 mb-0">@errorMessage</div>
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@errorMessage</MudAlert>
                 }
-            </div>
-            <div class="card-footer text-end">
-                <button class="btn btn-link" @onclick="CancelEdit">Cancel</button>
-                <button class="btn btn-primary" @onclick="SaveAsync" disabled="@saving">
+            </MudCardContent>
+            <MudCardActions>
+                <MudSpacer />
+                <MudButton OnClick="CancelEdit">Cancel</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
                     @(saving ? "Saving…" : "Save task")
-                </button>
-            </div>
-        </div>
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
     }
 
     @if (tasks is null)
     {
-        <p><em>Loading…</em></p>
+        <MudProgressLinear Indeterminate="true" />
     }
     else if (tasks.Count == 0)
     {
-        <p class="text-muted">No tasks yet. Add one to track work you need to do.</p>
+        <MudText Class="mud-text-secondary">No tasks yet. Add one to track work you need to do.</MudText>
     }
     else
     {
-        <div class="list-group">
-            @foreach (var task in tasks)
-            {
-                <div class="list-group-item">
-                    <div class="d-flex align-items-start">
-                        <input type="checkbox" class="form-check-input mt-1 me-2"
-                               checked="@task.IsComplete" @onchange="() => ToggleCompleteAsync(task)" />
-                        <div class="flex-grow-1">
-                            <div class="@(task.IsComplete ? "text-decoration-line-through text-muted" : "")">
-                                <strong>@task.Title</strong>
-                            </div>
-                            @if (!string.IsNullOrWhiteSpace(task.Description))
-                            {
-                                <div class="small text-muted">@task.Description</div>
-                            }
-                        </div>
-                        <div class="ms-2 text-nowrap">
-                            <button class="btn btn-outline-secondary btn-sm me-1" @onclick="() => EditTask(task)">Edit</button>
-                            <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(task)">Delete</button>
-                        </div>
-                    </div>
-                </div>
-            }
-        </div>
+        <MudTable Items="tasks" Hover="true" Dense="true" Elevation="1">
+            <HeaderContent>
+                <MudTh Style="width:1px">Done</MudTh>
+                <MudTh>Task</MudTh>
+                <MudTh Style="width:1px"></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <MudCheckBox T="bool" Value="@context.IsComplete"
+                                 ValueChanged="@(_ => ToggleCompleteAsync(context))" />
+                </MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.body1"
+                             Style="@(context.IsComplete ? "text-decoration:line-through" : "")">
+                        <b>@context.Title</b>
+                    </MudText>
+                    @if (!string.IsNullOrWhiteSpace(context.Description))
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Description</MudText>
+                    }
+                </MudTd>
+                <MudTd Style="text-align:right; white-space:nowrap">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                   OnClick="@(() => EditTask(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                   OnClick="@(() => DeleteAsync(context))" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
     }
 }
 
@@ -126,9 +122,9 @@ else
         }
     }
 
-    private async Task OnOrgChanged(ChangeEventArgs e)
+    private async Task OnOrgChanged(int orgId)
     {
-        selectedOrgId = int.Parse(e.Value!.ToString()!);
+        selectedOrgId = orgId;
         CancelEdit();
         await LoadAsync();
     }
@@ -219,7 +215,7 @@ else
 
     private async Task DeleteAsync(TaskDto task)
     {
-        if (!await JS.InvokeAsync<bool>("confirm", $"Delete the task “{task.Title}”?"))
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete the task \"{task.Title}\"?"))
         {
             return;
         }

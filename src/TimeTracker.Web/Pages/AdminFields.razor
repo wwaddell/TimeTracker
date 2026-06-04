@@ -1,181 +1,164 @@
 @page "/admin"
 @using TimeTracker.Contracts.Admin
+@using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Domain.Enums
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
 @inject IJSRuntime JS
 
 <PageTitle>Manage Fields</PageTitle>
 
-<h1 class="mb-4">Manage Fields</h1>
-
 @if (organizations is null)
 {
-    <p><em>Loading…</em></p>
+    <MudProgressLinear Indeterminate="true" />
 }
 else if (organizations.Count == 0)
 {
-    <div class="alert alert-warning">No organizations available for your account.</div>
+    <MudAlert Severity="Severity.Warning">No organizations available for your account.</MudAlert>
 }
 else
 {
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <label class="form-label">Organization</label>
-            <select class="form-select" @onchange="OnOrgChanged">
-                @foreach (var org in organizations)
-                {
-                    <option value="@org.Id" selected="@(org.Id == selectedOrgId)">
-                        @org.Name@(org.RoleName is null ? "" : $" — {org.RoleName}")
-                    </option>
-                }
-            </select>
-        </div>
-    </div>
+    <MudSelect T="int" Label="Organization" Value="selectedOrgId" ValueChanged="OnOrgChanged"
+               Variant="Variant.Outlined" Class="mb-4" Style="max-width:420px">
+        @foreach (var org in organizations)
+        {
+            <MudSelectItem T="int" Value="@org.Id">
+                @org.Name@(org.RoleName is null ? "" : $" — {org.RoleName}")
+            </MudSelectItem>
+        }
+    </MudSelect>
 
     @if (infoMessage is not null)
     {
-        <div class="alert alert-info">@infoMessage</div>
+        <MudAlert Severity="Severity.Info" Class="mb-3" ShowCloseIcon="true"
+                  CloseIconClicked="@(() => infoMessage = null)">@infoMessage</MudAlert>
     }
 
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <h2 class="h4 mb-0">Configurable fields</h2>
+    <div class="d-flex justify-space-between align-center mb-3">
+        <MudText Typo="Typo.h5">Configurable fields</MudText>
         @if (!showEditor)
         {
-            <button class="btn btn-primary btn-sm" @onclick="() => NewField()">+ Add field</button>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="NewField">Add field</MudButton>
         }
     </div>
 
-    @if (fields is null)
-    {
-        <p><em>Loading…</em></p>
-    }
-    else if (fields.Count == 0)
-    {
-        <p class="text-muted">No fields defined yet. The base note is always collected; add fields to capture more.</p>
-    }
-    else
-    {
-        <table class="table table-sm align-middle">
-            <thead>
-                <tr>
-                    <th>Label</th><th>Key</th><th>Type</th><th>Required</th>
-                    <th>Role</th><th>Active</th><th>Sort</th><th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var f in fields)
-                {
-                    <tr class="@(f.IsActive ? "" : "text-muted")">
-                        <td>@f.Label</td>
-                        <td><code>@f.FieldKey</code></td>
-                        <td>@f.DataType</td>
-                        <td>@(f.IsRequired ? "Yes" : "No")</td>
-                        <td>@(f.OrganizationRoleName ?? "All roles")</td>
-                        <td>@(f.IsActive ? "Yes" : "No")</td>
-                        <td>@f.SortOrder</td>
-                        <td class="text-end">
-                            <button class="btn btn-outline-secondary btn-sm me-1" @onclick="() => EditField(f)">Edit</button>
-                            <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteFieldAsync(f)">Delete</button>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-
     @if (showEditor && editing is not null)
     {
-        <div class="card mt-3">
-            <div class="card-header">@(editing.Id == 0 ? "New field" : $"Edit “{editing.Label}”")</div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-sm-6">
-                        <label class="form-label">Label <span class="text-danger">*</span></label>
-                        <input class="form-control" @bind="editing.Label" />
-                    </div>
-                    <div class="col-sm-6">
-                        <label class="form-label">Key <span class="text-danger">*</span></label>
-                        <input class="form-control" @bind="editing.FieldKey" placeholder="e.g. project_code" />
-                    </div>
-                    <div class="col-sm-4">
-                        <label class="form-label">Type</label>
-                        <select class="form-select" @bind="editing.DataType">
+        <MudCard Class="mb-4" Elevation="2">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-2">@(editing.Id == 0 ? "New field" : $"Edit \"{editing.Label}\"")</MudText>
+                <MudGrid>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField T="string" Label="Label" @bind-Value="editing.Label" Required="true"
+                                      Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField T="string" Label="Key" @bind-Value="editing.FieldKey" Required="true"
+                                      Variant="Variant.Outlined" Placeholder="e.g. project_code" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="FieldDataType" Label="Type" @bind-Value="editing.DataType" Variant="Variant.Outlined">
                             @foreach (var dt in Enum.GetValues<FieldDataType>())
                             {
-                                <option value="@dt">@dt</option>
+                                <MudSelectItem T="FieldDataType" Value="@dt">@dt</MudSelectItem>
                             }
-                        </select>
-                    </div>
-                    <div class="col-sm-4">
-                        <label class="form-label">Role</label>
-                        <select class="form-select" @bind="editing.OrganizationRoleId">
-                            <option value="">All roles</option>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="int?" Label="Role" @bind-Value="editing.OrganizationRoleId" Variant="Variant.Outlined">
+                            <MudSelectItem T="int?" Value="@((int?)null)">All roles</MudSelectItem>
                             @foreach (var role in roles ?? [])
                             {
-                                <option value="@role.Id">@role.Name</option>
+                                <MudSelectItem T="int?" Value="@((int?)role.Id)">@role.Name</MudSelectItem>
                             }
-                        </select>
-                    </div>
-                    <div class="col-sm-4">
-                        <label class="form-label">Sort order</label>
-                        <input type="number" class="form-control" @bind="editing.SortOrder" />
-                    </div>
-                    <div class="col-12">
-                        <div class="form-check form-check-inline">
-                            <input type="checkbox" class="form-check-input" id="req" @bind="editing.IsRequired" />
-                            <label class="form-check-label" for="req">Required</label>
-                        </div>
-                        <div class="form-check form-check-inline">
-                            <input type="checkbox" class="form-check-input" id="act" @bind="editing.IsActive" />
-                            <label class="form-check-label" for="act">Active</label>
-                        </div>
-                    </div>
-                </div>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudNumericField T="int" Label="Sort order" @bind-Value="editing.SortOrder" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudCheckBox T="bool" Label="Required" @bind-Value="editing.IsRequired" />
+                        <MudCheckBox T="bool" Label="Active" @bind-Value="editing.IsActive" />
+                    </MudItem>
+                </MudGrid>
 
                 @if (editing.DataType == FieldDataType.Select)
                 {
-                    <hr />
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <strong>Options</strong>
-                        <button class="btn btn-outline-secondary btn-sm" @onclick="AddOption">+ Add option</button>
+                    <MudDivider Class="my-3" />
+                    <div class="d-flex justify-space-between align-center mb-2">
+                        <MudText Typo="Typo.subtitle1">Options</MudText>
+                        <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddOption">Add option</MudButton>
                     </div>
                     @if (editing.Options.Count == 0)
                     {
-                        <p class="text-muted small">Add at least one option for a select field.</p>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Add at least one option for a select field.</MudText>
                     }
                     @foreach (var opt in editing.Options)
                     {
-                        <div class="row g-2 mb-2">
-                            <div class="col-sm-5">
-                                <input class="form-control form-control-sm" placeholder="Value" @bind="opt.Value" />
-                            </div>
-                            <div class="col-sm-5">
-                                <input class="form-control form-control-sm" placeholder="Label" @bind="opt.Label" />
-                            </div>
-                            <div class="col-sm-2">
-                                <button class="btn btn-outline-danger btn-sm" @onclick="() => RemoveOption(opt)">Remove</button>
-                            </div>
-                        </div>
+                        <MudGrid Class="align-center mb-1">
+                            <MudItem xs="5">
+                                <MudTextField T="string" Placeholder="Value" @bind-Value="opt.Value" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="5">
+                                <MudTextField T="string" Placeholder="Label" @bind-Value="opt.Label" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="2">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                               OnClick="@(() => RemoveOption(opt))" />
+                            </MudItem>
+                        </MudGrid>
                     }
                 }
 
                 @if (errorMessage is not null)
                 {
-                    <div class="alert alert-danger mt-3 mb-0">@errorMessage</div>
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@errorMessage</MudAlert>
                 }
-            </div>
-            <div class="card-footer text-end">
-                <button class="btn btn-link" @onclick="CancelEdit">Cancel</button>
-                <button class="btn btn-primary" @onclick="SaveAsync" disabled="@saving">
+            </MudCardContent>
+            <MudCardActions>
+                <MudSpacer />
+                <MudButton OnClick="CancelEdit">Cancel</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
                     @(saving ? "Saving…" : "Save field")
-                </button>
-            </div>
-        </div>
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+
+    @if (fields is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (fields.Count == 0)
+    {
+        <MudText Class="mud-text-secondary">No fields defined yet. The base note is always collected; add fields to capture more.</MudText>
+    }
+    else
+    {
+        <MudTable Items="fields" Hover="true" Dense="true" Elevation="1">
+            <HeaderContent>
+                <MudTh>Label</MudTh><MudTh>Key</MudTh><MudTh>Type</MudTh><MudTh>Required</MudTh>
+                <MudTh>Role</MudTh><MudTh>Active</MudTh><MudTh>Sort</MudTh><MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Label</MudTd>
+                <MudTd><code>@context.FieldKey</code></MudTd>
+                <MudTd>@context.DataType</MudTd>
+                <MudTd>@(context.IsRequired ? "Yes" : "No")</MudTd>
+                <MudTd>@(context.OrganizationRoleName ?? "All roles")</MudTd>
+                <MudTd>@(context.IsActive ? "Yes" : "No")</MudTd>
+                <MudTd>@context.SortOrder</MudTd>
+                <MudTd Style="text-align:right; white-space:nowrap">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditField(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteFieldAsync(context))" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
     }
 }
 
 @code {
-    private IReadOnlyList<OrganizationDtoLite>? organizations;
+    private IReadOnlyList<OrganizationDto>? organizations;
     private IReadOnlyList<OrganizationRoleDto>? roles;
     private IReadOnlyList<EntryFieldAdminDto>? fields;
     private int selectedOrgId;
@@ -188,8 +171,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var orgs = await Api.GetOrganizationsAsync();
-        organizations = orgs.Select(o => new OrganizationDtoLite(o.Id, o.Name, o.RoleName)).ToList();
+        organizations = await Api.GetOrganizationsAsync();
         if (organizations.Count > 0)
         {
             selectedOrgId = organizations[0].Id;
@@ -197,9 +179,9 @@ else
         }
     }
 
-    private async Task OnOrgChanged(ChangeEventArgs e)
+    private async Task OnOrgChanged(int orgId)
     {
-        selectedOrgId = int.Parse(e.Value!.ToString()!);
+        selectedOrgId = orgId;
         CancelEdit();
         infoMessage = null;
         await LoadAsync();
@@ -296,7 +278,7 @@ else
 
     private async Task DeleteFieldAsync(EntryFieldAdminDto f)
     {
-        if (!await JS.InvokeAsync<bool>("confirm", $"Delete the field “{f.Label}”?"))
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete the field \"{f.Label}\"?"))
         {
             return;
         }
@@ -324,6 +306,4 @@ else
         public string Value { get; set; } = string.Empty;
         public string Label { get; set; } = string.Empty;
     }
-
-    private record OrganizationDtoLite(int Id, string Name, string? RoleName);
 }
