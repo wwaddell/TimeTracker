@@ -6,19 +6,19 @@ using TimeTracker.Contracts.TimeEntries;
 
 namespace TimeTracker.Web.Services;
 
-/// <summary>Typed wrapper over the TimeTracker Web API.</summary>
+/// <summary>Typed wrapper over the TimeTracker Web API with friendly error handling.</summary>
 public class TimeTrackerApi(HttpClient http)
 {
     // --- Time logging ---
 
     public async Task<IReadOnlyList<OrganizationDto>> GetOrganizationsAsync() =>
-        await http.GetFromJsonAsync<List<OrganizationDto>>("/api/organizations") ?? [];
+        await GetAsync<List<OrganizationDto>>("/api/organizations") ?? [];
 
     public async Task<IReadOnlyList<EntryFieldDto>> GetEntryFieldsAsync(int orgId) =>
-        await http.GetFromJsonAsync<List<EntryFieldDto>>($"/api/organizations/{orgId}/entry-fields") ?? [];
+        await GetAsync<List<EntryFieldDto>>($"/api/organizations/{orgId}/entry-fields") ?? [];
 
     public async Task<PagedResult<TimeEntryDto>> GetTimeEntriesAsync(int orgId, int page, int pageSize) =>
-        await http.GetFromJsonAsync<PagedResult<TimeEntryDto>>(
+        await GetAsync<PagedResult<TimeEntryDto>>(
             $"/api/organizations/{orgId}/time-entries?page={page}&pageSize={pageSize}")
         ?? new PagedResult<TimeEntryDto>([], page, pageSize, 0);
 
@@ -34,7 +34,7 @@ public class TimeTrackerApi(HttpClient http)
     // --- Tasks ---
 
     public async Task<IReadOnlyList<TaskDto>> GetTasksAsync(int orgId) =>
-        await http.GetFromJsonAsync<List<TaskDto>>($"/api/organizations/{orgId}/tasks") ?? [];
+        await GetAsync<List<TaskDto>>($"/api/organizations/{orgId}/tasks") ?? [];
 
     public async Task<ApiResult> CreateTaskAsync(int orgId, SaveTaskRequest request) =>
         await SendAsync(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/tasks", request));
@@ -48,10 +48,10 @@ public class TimeTrackerApi(HttpClient http)
     // --- Admin: configurable fields ---
 
     public async Task<IReadOnlyList<OrganizationRoleDto>> GetRolesAsync(int orgId) =>
-        await http.GetFromJsonAsync<List<OrganizationRoleDto>>($"/api/organizations/{orgId}/roles") ?? [];
+        await GetAsync<List<OrganizationRoleDto>>($"/api/organizations/{orgId}/roles") ?? [];
 
     public async Task<IReadOnlyList<EntryFieldAdminDto>> GetAdminFieldsAsync(int orgId) =>
-        await http.GetFromJsonAsync<List<EntryFieldAdminDto>>($"/api/organizations/{orgId}/admin/entry-fields") ?? [];
+        await GetAsync<List<EntryFieldAdminDto>>($"/api/organizations/{orgId}/admin/entry-fields") ?? [];
 
     public async Task<ApiResult> CreateFieldAsync(int orgId, SaveEntryFieldRequest request) =>
         await SendAsync(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/admin/entry-fields", request));
@@ -61,7 +61,16 @@ public class TimeTrackerApi(HttpClient http)
 
     public async Task<DeleteFieldResult> DeleteFieldAsync(int orgId, int fieldId)
     {
-        var response = await http.DeleteAsync($"/api/organizations/{orgId}/admin/entry-fields/{fieldId}");
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.DeleteAsync($"/api/organizations/{orgId}/admin/entry-fields/{fieldId}");
+        }
+        catch (Exception ex)
+        {
+            return new DeleteFieldResult(false, false, ConnectionError(ex));
+        }
+
         if (response.IsSuccessStatusCode)
         {
             return await response.Content.ReadFromJsonAsync<DeleteFieldResult>()
@@ -72,17 +81,65 @@ public class TimeTrackerApi(HttpClient http)
         return new DeleteFieldResult(false, false, problem ?? $"Delete failed ({(int)response.StatusCode}).");
     }
 
+    // --- Plumbing ---
+
+    private async Task<T?> GetAsync<T>(string url)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.GetAsync(url);
+        }
+        catch (Exception ex)
+        {
+            throw new ApiException(ConnectionError(ex), ex);
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var problem = await TryReadProblemAsync(response);
+            throw new ApiException(problem ?? ServerError(response));
+        }
+
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<T>();
+        }
+        catch (Exception ex)
+        {
+            throw new ApiException("The server sent an unexpected response.", ex);
+        }
+    }
+
     private static async Task<ApiResult> SendAsync(Func<Task<HttpResponseMessage>> send)
     {
-        var response = await send();
+        HttpResponseMessage response;
+        try
+        {
+            response = await send();
+        }
+        catch (Exception ex)
+        {
+            return new ApiResult(false, ConnectionError(ex));
+        }
+
         if (response.IsSuccessStatusCode)
         {
             return new ApiResult(true, null);
         }
 
         var problem = await TryReadProblemAsync(response);
-        return new ApiResult(false, problem ?? $"Request failed ({(int)response.StatusCode}).");
+        return new ApiResult(false, problem ?? ServerError(response));
     }
+
+    private static string ConnectionError(Exception ex) =>
+        ex is TaskCanceledException
+            ? "The request to the TimeTracker API timed out. It may be starting up or unreachable."
+            : "Couldn't reach the TimeTracker API. Make sure the API is running, then retry.";
+
+    private static string ServerError(HttpResponseMessage response) => (int)response.StatusCode >= 500
+        ? "The server hit an error handling the request (this is often the database being unavailable)."
+        : $"The request failed ({(int)response.StatusCode} {response.ReasonPhrase}).";
 
     private static async Task<string?> TryReadProblemAsync(HttpResponseMessage response)
     {
@@ -93,7 +150,7 @@ public class TimeTrackerApi(HttpClient http)
             {
                 return string.Join(" ", problem.Errors.SelectMany(e => e.Value));
             }
-            return problem?.Title;
+            return problem?.Detail ?? problem?.Title;
         }
         catch
         {
@@ -101,8 +158,11 @@ public class TimeTrackerApi(HttpClient http)
         }
     }
 
-    private record ValidationProblemResponse(string? Title, Dictionary<string, string[]>? Errors);
+    private record ValidationProblemResponse(string? Title, string? Detail, Dictionary<string, string[]>? Errors);
 }
 
 /// <summary>Outcome of a mutating API call, with a user-facing error when it fails.</summary>
 public record ApiResult(bool Success, string? Error);
+
+/// <summary>Thrown by read calls when the API is unreachable or returns an error.</summary>
+public sealed class ApiException(string message, Exception? inner = null) : Exception(message, inner);

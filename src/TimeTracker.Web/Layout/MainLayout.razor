@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @using TimeTracker.Web.Theme
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <MudThemeProvider @ref="_themeProvider" @bind-IsDarkMode="_isDarkMode" Theme="AppTheme.Instance" />
 <MudPopoverProvider />
@@ -29,7 +30,19 @@
 
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.Large" Class="my-6">
-            @Body
+            <ErrorBoundary @ref="_errorBoundary">
+                <ChildContent>
+                    @Body
+                </ChildContent>
+                <ErrorContent>
+                    <MudAlert Severity="Severity.Error" Class="my-4">
+                        <MudText Typo="Typo.subtitle1">Something went wrong on this page.</MudText>
+                        <MudText Typo="Typo.body2" Class="mb-2">Try reloading. If it keeps happening, the API may be down.</MudText>
+                        <MudButton Variant="Variant.Filled" Color="Color.Error"
+                                   StartIcon="@Icons.Material.Filled.Refresh" OnClick="Reload">Reload</MudButton>
+                    </MudAlert>
+                </ErrorContent>
+            </ErrorBoundary>
         </MudContainer>
     </MudMainContent>
 </MudLayout>
@@ -38,8 +51,14 @@
     private const string DarkModeKey = "tt-dark-mode";
 
     private MudThemeProvider _themeProvider = default!;
+    private ErrorBoundary _errorBoundary = default!;
     private bool _drawerOpen = true;
     private bool _isDarkMode;
+
+    // Clear the boundary on navigation so a previous page's error doesn't stick.
+    protected override void OnParametersSet() => _errorBoundary?.Recover();
+
+    private void Reload() => Nav.NavigateTo(Nav.Uri, forceLoad: true);
 
     private string DarkModeIcon =>
         _isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode;

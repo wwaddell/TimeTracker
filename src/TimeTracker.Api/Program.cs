@@ -11,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 const string WebCorsPolicy = "WebClient";
 
 builder.Services.AddOpenApi();
+builder.Services.AddProblemDetails();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
@@ -62,6 +63,11 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+
+// Return clean ProblemDetails JSON for unhandled exceptions (instead of an HTML error page),
+// so the client can show a useful message.
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 
 if (app.Environment.IsDevelopment())
 {

@@ -3,15 +3,30 @@
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Contracts.Tasks
 @using TimeTracker.Web.Components
+@using TimeTracker.Web.Services
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
 <PageTitle>Log Time</PageTitle>
 
+@if (loadError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <div class="d-flex align-center justify-space-between" style="gap:1rem">
+            <span>@loadError</span>
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAllAsync">Retry</MudButton>
+        </div>
+    </MudAlert>
+}
+
 @if (organizations is null)
 {
-    <MudProgressLinear Indeterminate="true" />
+    @if (loadError is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
 }
 else if (organizations.Count == 0)
 {
@@ -116,24 +131,48 @@ else
 
     private string quickNote = string.Empty;
     private bool quickAdding;
+    private string? loadError;
 
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(total / (double)PageSize));
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync() => ReloadAllAsync();
+
+    private Task ReloadAllAsync() => GuardAsync(async () =>
     {
         organizations = await Api.GetOrganizationsAsync();
         if (organizations.Count > 0)
         {
-            selectedOrgId = organizations[0].Id;
+            if (selectedOrgId == 0)
+            {
+                selectedOrgId = organizations[0].Id;
+            }
             await LoadOrgDataAsync();
         }
-    }
+    });
 
     private async Task OnOrgChanged(int orgId)
     {
         selectedOrgId = orgId;
         page = 1;
-        await LoadOrgDataAsync();
+        await GuardAsync(LoadOrgDataAsync);
+    }
+
+    // Runs a load action, surfacing failures as a friendly retryable banner instead of crashing.
+    private async Task GuardAsync(Func<Task> action)
+    {
+        try
+        {
+            loadError = null;
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex.Message;
+        }
+        catch (Exception)
+        {
+            loadError = "Something went wrong loading your data. Please retry.";
+        }
     }
 
     private async Task LoadOrgDataAsync()
@@ -160,7 +199,7 @@ else
     private async Task OnPageChanged(int newPage)
     {
         page = newPage;
-        await LoadEntriesAsync();
+        await GuardAsync(LoadEntriesAsync);
     }
 
     private async Task QuickKeyDown(KeyboardEventArgs e)
@@ -192,7 +231,7 @@ else
             {
                 quickNote = string.Empty;
                 page = 1;
-                await LoadEntriesAsync();
+                await GuardAsync(LoadEntriesAsync);
                 Snackbar.Add("Entry logged", Severity.Success);
             }
             else
@@ -226,7 +265,7 @@ else
         if (result is { Canceled: false })
         {
             if (entry is null) { page = 1; }
-            await LoadEntriesAsync();
+            await GuardAsync(LoadEntriesAsync);
         }
     }
 

@@ -1,15 +1,30 @@
 @page "/tasks"
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Contracts.Tasks
+@using TimeTracker.Web.Services
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 
 <PageTitle>Tasks</PageTitle>
 
+@if (loadError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <div class="d-flex align-center justify-space-between" style="gap:1rem">
+            <span>@loadError</span>
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAllAsync">Retry</MudButton>
+        </div>
+    </MudAlert>
+}
+
 @if (organizations is null)
 {
-    <MudProgressLinear Indeterminate="true" />
+    @if (loadError is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
 }
 else if (organizations.Count == 0)
 {
@@ -116,25 +131,48 @@ else
     private bool showEditor;
     private bool saving;
     private string? errorMessage;
+    private string? loadError;
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync() => ReloadAllAsync();
+
+    private Task ReloadAllAsync() => GuardAsync(async () =>
     {
         organizations = await Api.GetOrganizationsAsync();
         if (organizations.Count > 0)
         {
-            selectedOrgId = organizations[0].Id;
+            if (selectedOrgId == 0)
+            {
+                selectedOrgId = organizations[0].Id;
+            }
             await LoadAsync();
         }
-    }
+    });
 
     private async Task OnOrgChanged(int orgId)
     {
         selectedOrgId = orgId;
         CancelEdit();
-        await LoadAsync();
+        await GuardAsync(LoadAsync);
     }
 
     private async Task LoadAsync() => tasks = await Api.GetTasksAsync(selectedOrgId);
+
+    private async Task GuardAsync(Func<Task> action)
+    {
+        try
+        {
+            loadError = null;
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex.Message;
+        }
+        catch (Exception)
+        {
+            loadError = "Something went wrong loading your tasks. Please retry.";
+        }
+    }
 
     private void NewTask()
     {
