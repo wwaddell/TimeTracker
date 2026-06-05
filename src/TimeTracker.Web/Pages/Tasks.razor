@@ -108,10 +108,23 @@ else
                     }
                 </MudTd>
                 <MudTd>
-                    <MudText Typo="Typo.body1"
-                             Style="@(context.IsComplete ? "text-decoration:line-through" : "")">
-                        <b>@context.Title</b>
-                    </MudText>
+                    <div class="d-flex align-center" style="gap:.4rem; flex-wrap:wrap">
+                        <MudText Typo="Typo.body1"
+                                 Style="@(context.IsComplete ? "text-decoration:line-through" : "")">
+                            <b>@context.Title</b>
+                        </MudText>
+                        @if (!string.IsNullOrWhiteSpace(context.ReferenceCode))
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@context.ReferenceCode</MudChip>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(context.ExternalUrl))
+                        {
+                            <MudTooltip Text="@context.ExternalUrl">
+                                <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
+                                               Href="@context.ExternalUrl" Target="_blank" />
+                            </MudTooltip>
+                        }
+                    </div>
                     @if (!string.IsNullOrWhiteSpace(context.ProjectName))
                     {
                         <MudText Typo="Typo.caption" Class="mud-text-secondary d-flex align-center" Style="gap:.25rem">

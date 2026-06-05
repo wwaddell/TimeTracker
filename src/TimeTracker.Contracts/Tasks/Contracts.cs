@@ -16,6 +16,8 @@ public record TaskDto(
     string? Project,
     int? ProjectId,
     string? ProjectName,
+    string? ReferenceCode,
+    string? ExternalUrl,
     DateTime CreatedUtc);
 
 /// <summary>Create/update payload for a task.</summary>
@@ -41,4 +43,10 @@ public record SaveTaskRequest
 
     /// <summary>Optional first-class project this task is linked to (preferred).</summary>
     public int? ProjectId { get; init; }
+
+    /// <summary>Optional short tag (e.g. external ticket id).</summary>
+    public string? ReferenceCode { get; init; }
+
+    /// <summary>Optional external URL (e.g. the task's page in another system).</summary>
+    public string? ExternalUrl { get; init; }
 }

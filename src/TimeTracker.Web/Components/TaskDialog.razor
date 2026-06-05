@@ -22,6 +22,16 @@
             </MudSelect>
         }
         <MudGrid Class="mb-3">
+            <MudItem xs="12" sm="5">
+                <MudTextField T="string" Label="Reference code" @bind-Value="referenceCode"
+                              Variant="Variant.Outlined" Placeholder="e.g. JIRA-123" />
+            </MudItem>
+            <MudItem xs="12" sm="7">
+                <MudTextField T="string" Label="External URL" @bind-Value="externalUrl"
+                              Variant="Variant.Outlined" InputType="InputType.Url" Placeholder="https://…" />
+            </MudItem>
+        </MudGrid>
+        <MudGrid Class="mb-3">
             <MudItem xs="12" sm="4">
                 <MudSelect T="TaskPriority?" Label="Priority" @bind-Value="priority" Clearable="true" Variant="Variant.Outlined">
                     @foreach (var p in Enum.GetValues<TaskPriority>())
@@ -76,6 +86,8 @@
     private TaskPriority? priority;
     private DateTime? dueDate;
     private int? projectId;
+    private string? referenceCode;
+    private string? externalUrl;
     private bool saving;
     private string? error;
 
@@ -92,6 +104,8 @@
             priority = t.Priority;
             dueDate = t.DueDate?.ToDateTime(TimeOnly.MinValue);
             projectId = t.ProjectId;
+            referenceCode = t.ReferenceCode;
+            externalUrl = t.ExternalUrl;
         }
     }
 
@@ -118,6 +132,8 @@
                 Priority = priority,
                 DueDate = dueDate is { } d ? DateOnly.FromDateTime(d) : null,
                 ProjectId = projectId,
+                ReferenceCode = referenceCode,
+                ExternalUrl = externalUrl,
             };
             var result = Existing is null
                 ? await Api.CreateTaskAsync(OrgId, request)

@@ -28,6 +28,7 @@ public static class TaskEndpoints
                     t.EstimatedHours, t.PercentComplete, t.PercentBeforeComplete,
                     t.Priority, t.DueDate, t.Project,
                     t.ProjectId, t.ProjectEntity != null ? t.ProjectEntity.Name : null,
+                    t.ReferenceCode, t.ExternalUrl,
                     t.CreatedUtc))
                 .ToListAsync();
 
@@ -63,6 +64,8 @@ public static class TaskEndpoints
                 DueDate = request.DueDate,
                 Project = string.IsNullOrWhiteSpace(request.Project) ? null : request.Project.Trim(),
                 ProjectId = request.ProjectId,
+                ReferenceCode = string.IsNullOrWhiteSpace(request.ReferenceCode) ? null : request.ReferenceCode.Trim(),
+                ExternalUrl = string.IsNullOrWhiteSpace(request.ExternalUrl) ? null : request.ExternalUrl.Trim(),
                 CreatedUtc = DateTime.UtcNow,
             };
             db.Tasks.Add(task);
@@ -100,6 +103,8 @@ public static class TaskEndpoints
             task.DueDate = request.DueDate;
             task.Project = string.IsNullOrWhiteSpace(request.Project) ? null : request.Project.Trim();
             task.ProjectId = request.ProjectId;
+            task.ReferenceCode = string.IsNullOrWhiteSpace(request.ReferenceCode) ? null : request.ReferenceCode.Trim();
+            task.ExternalUrl = string.IsNullOrWhiteSpace(request.ExternalUrl) ? null : request.ExternalUrl.Trim();
             task.ModifiedUtc = DateTime.UtcNow;
 
             await db.SaveChangesAsync();

@@ -25,6 +25,12 @@ public class TaskItem : AuditableEntity, ISoftDeletable
     public int? ProjectId { get; set; }
     public Project? ProjectEntity { get; set; }
 
+    /// <summary>Optional short tag (e.g. an external ticket id like "JIRA-123").</summary>
+    public string? ReferenceCode { get; set; }
+
+    /// <summary>Optional external URL (e.g. the task's page in another system).</summary>
+    public string? ExternalUrl { get; set; }
+
     /// <summary>Optional priority (null = none).</summary>
     public TaskPriority? Priority { get; set; }
 
