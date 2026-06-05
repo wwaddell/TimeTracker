@@ -6,7 +6,7 @@ namespace TimeTracker.Contracts.TimeEntries;
 public record OrganizationDto(int Id, string Name, string? RoleName, bool RequireTime = true);
 
 /// <summary>An allowed value for a select-type configurable field.</summary>
-public record EntryFieldOptionDto(string Value, string Label);
+public record EntryFieldOptionDto(string Value, string Label, string? Icon = null);
 
 /// <summary>Definition of a configurable extra field shown on the entry form.</summary>
 public record EntryFieldDto(

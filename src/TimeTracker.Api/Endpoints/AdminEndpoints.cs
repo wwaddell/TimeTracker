@@ -69,7 +69,7 @@ public static class AdminEndpoints
                     f.OrganizationRoleId,
                     f.OrganizationRole != null ? f.OrganizationRole.Name : null,
                     f.Options.OrderBy(o => o.SortOrder)
-                        .Select(o => new EntryFieldOptionInput(o.Value, o.Label, o.SortOrder)).ToList()))
+                        .Select(o => new EntryFieldOptionInput(o.Value, o.Label, o.SortOrder, o.Icon)).ToList()))
                 .ToListAsync();
 
             return Results.Ok(fields);
@@ -244,6 +244,7 @@ public static class AdminEndpoints
             {
                 Value = opt.Value.Trim(),
                 Label = string.IsNullOrWhiteSpace(opt.Label) ? opt.Value.Trim() : opt.Label.Trim(),
+                Icon = string.IsNullOrWhiteSpace(opt.Icon) ? null : opt.Icon.Trim(),
                 SortOrder = opt.SortOrder == 0 ? ++sort : opt.SortOrder,
             });
         }

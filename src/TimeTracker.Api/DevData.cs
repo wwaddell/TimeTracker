@@ -61,9 +61,9 @@ public static class DevData
             FieldKey = "category", Label = "Category", DataType = FieldDataType.Select,
             IsRequired = false, SortOrder = 3, CreatedUtc = DateTime.UtcNow,
         };
-        category.Options.Add(new TimeEntryFieldOption { Value = "meeting", Label = "Meeting", SortOrder = 1 });
-        category.Options.Add(new TimeEntryFieldOption { Value = "development", Label = "Development", SortOrder = 2 });
-        category.Options.Add(new TimeEntryFieldOption { Value = "support", Label = "Support", SortOrder = 3 });
+        category.Options.Add(new TimeEntryFieldOption { Value = "meeting", Label = "Meeting", Icon = "meeting", SortOrder = 1 });
+        category.Options.Add(new TimeEntryFieldOption { Value = "development", Label = "Development", Icon = "development", SortOrder = 2 });
+        category.Options.Add(new TimeEntryFieldOption { Value = "support", Label = "Support", Icon = "support", SortOrder = 3 });
         acme.TimeEntryFields.Add(category);
 
         // --- Personal: minimal configuration (just the base note) ---

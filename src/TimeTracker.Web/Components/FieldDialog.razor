@@ -53,13 +53,29 @@
             @foreach (var opt in model.Options)
             {
                 <MudGrid Class="align-center mb-1">
-                    <MudItem xs="5">
+                    <MudItem xs="4">
                         <MudTextField T="string" Placeholder="Value" @bind-Value="opt.Value" Variant="Variant.Outlined" Margin="Margin.Dense" />
                     </MudItem>
-                    <MudItem xs="5">
+                    <MudItem xs="4">
                         <MudTextField T="string" Placeholder="Label" @bind-Value="opt.Label" Variant="Variant.Outlined" Margin="Margin.Dense" />
                     </MudItem>
-                    <MudItem xs="2">
+                    <MudItem xs="3">
+                        <MudSelect T="string" @bind-Value="opt.Icon" Clearable="true" Dense="true" Margin="Margin.Dense"
+                                   Variant="Variant.Outlined" Placeholder="Icon"
+                                   AdornmentIcon="@TimeTracker.Web.Theme.EntryIconPalette.Resolve(opt.Icon)"
+                                   Adornment="@(TimeTracker.Web.Theme.EntryIconPalette.Resolve(opt.Icon) is null ? Adornment.None : Adornment.Start)"
+                                   ToStringFunc="@TimeTracker.Web.Theme.EntryIconPalette.Display">
+                            @foreach (var c in TimeTracker.Web.Theme.EntryIconPalette.Choices)
+                            {
+                                <MudSelectItem T="string" Value="@c.Key">
+                                    <div class="d-flex align-center" style="gap:.5rem">
+                                        <MudIcon Icon="@c.Icon" Size="Size.Small" /> @c.Display
+                                    </div>
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="1">
                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
                                        OnClick="@(() => RemoveOption(opt))" />
                     </MudItem>
@@ -109,7 +125,7 @@
                 SortOrder = f.SortOrder,
                 IsActive = f.IsActive,
                 OrganizationRoleId = f.OrganizationRoleId,
-                Options = f.Options.Select(o => new OptionEditModel { Value = o.Value, Label = o.Label }).ToList(),
+                Options = f.Options.Select(o => new OptionEditModel { Value = o.Value, Label = o.Label, Icon = o.Icon }).ToList(),
             };
         }
         else
@@ -145,7 +161,7 @@
                 OrganizationRoleId = model.OrganizationRoleId,
                 Options = model.Options
                     .Where(o => !string.IsNullOrWhiteSpace(o.Value))
-                    .Select((o, i) => new EntryFieldOptionInput(o.Value, o.Label, i + 1))
+                    .Select((o, i) => new EntryFieldOptionInput(o.Value, o.Label, i + 1, o.Icon))
                     .ToList(),
             };
 
@@ -188,5 +204,6 @@
     {
         public string Value { get; set; } = string.Empty;
         public string Label { get; set; } = string.Empty;
+        public string? Icon { get; set; }
     }
 }

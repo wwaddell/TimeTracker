@@ -12,6 +12,7 @@ public class TimeEntryFieldOptionConfiguration : IEntityTypeConfiguration<TimeEn
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Value).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Label).IsRequired().HasMaxLength(200);
+        builder.Property(x => x.Icon).HasMaxLength(64);
 
         builder.HasOne(x => x.TimeEntryField)
             .WithMany(f => f.Options)

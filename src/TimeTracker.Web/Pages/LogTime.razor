@@ -4,6 +4,7 @@
 @using TimeTracker.Contracts.Tasks
 @using TimeTracker.Domain.Enums
 @using TimeTracker.Web.Components
+@using TimeTracker.Web.Theme
 @using TimeTracker.Web.Services
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
 @inject IDialogService DialogService
@@ -93,15 +94,30 @@ else
                 if (entry.TaskTitle is not null) { headerParts.Add(entry.TaskTitle); }
                 var noteIsHeader = headerParts.Count == 0;
                 var header = noteIsHeader ? entry.Note : string.Join(" · ", headerParts);
-                var detailAttrs = project is null ? attrs : attrs.Where(a => a.FieldId != project.FieldId).ToList();
+                var cat = CategoryFor(entry);
+                // Lead glyph: the category's icon if set, else a project/task/default icon — so
+                // every row has a consistent header.
+                var leadIcon = cat.Icon
+                    ?? (project is not null ? Icons.Material.Filled.Folder
+                        : entry.TaskTitle is not null ? Icons.Material.Filled.Assignment
+                        : Icons.Material.Filled.Schedule);
+                // Below: everything except Project (in the header) and Category (shown as the icon).
+                var detailAttrs = attrs.Where(a =>
+                    (project is null || a.FieldId != project.FieldId)
+                    && (cat.Icon is null || a.FieldId != cat.FieldId)).ToList();
                 <MudPaper Class="pa-4" Outlined="true" Style="cursor:pointer"
                           @onclick="@(() => OpenEdit(entry))">
                     <div class="d-flex justify-space-between" style="gap:1rem">
                         <div class="d-flex align-center" style="gap:.35rem; min-width:0">
-                            @if (!noteIsHeader)
+                            @if (cat.Icon is not null)
                             {
-                                <MudIcon Icon="@(project is not null ? Icons.Material.Filled.Folder : Icons.Material.Filled.Assignment)"
-                                         Size="Size.Small" Color="Color.Primary" />
+                                <MudTooltip Text="@cat.Label">
+                                    <MudIcon Icon="@leadIcon" Size="Size.Small" Color="Color.Primary" />
+                                </MudTooltip>
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@leadIcon" Size="Size.Small" Color="Color.Primary" />
                             }
                             <MudText Typo="Typo.subtitle1" Style="font-weight:600; word-break:break-word">@header</MudText>
                             @if (entry.Source == TimeEntrySource.OutlookGraph)
@@ -349,6 +365,27 @@ else
                 await LoadEntriesAsync();
             });
         }
+    }
+
+    // Resolves the entry's Category to a header icon (from the option's assigned icon) + label.
+    private (string? Icon, string? Label, int FieldId) CategoryFor(TimeEntryDto entry)
+    {
+        var field = (fields ?? []).FirstOrDefault(f =>
+            string.Equals(f.FieldKey, "category", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(f.Label, "category", StringComparison.OrdinalIgnoreCase));
+        if (field is null)
+        {
+            return (null, null, 0);
+        }
+
+        var attr = entry.Attributes.FirstOrDefault(a => a.FieldId == field.Id && !string.IsNullOrWhiteSpace(a.Value));
+        if (attr is null)
+        {
+            return (null, null, field.Id);
+        }
+
+        var option = field.Options.FirstOrDefault(o => o.Value == attr.Value);
+        return (EntryIconPalette.Resolve(option?.Icon), option?.Label ?? attr.Value, field.Id);
     }
 
     private List<string> MissingLabels(TimeEntryDto entry)

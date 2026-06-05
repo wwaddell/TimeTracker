@@ -6,7 +6,7 @@ namespace TimeTracker.Contracts.Admin;
 public record OrganizationRoleDto(int Id, string Name);
 
 /// <summary>An option for a select-type field; used for both input and output.</summary>
-public record EntryFieldOptionInput(string Value, string Label, int SortOrder);
+public record EntryFieldOptionInput(string Value, string Label, int SortOrder, string? Icon = null);
 
 /// <summary>Full admin view of a configurable field, including inactive ones.</summary>
 public record EntryFieldAdminDto(

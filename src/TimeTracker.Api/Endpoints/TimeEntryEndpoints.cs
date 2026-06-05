@@ -60,7 +60,7 @@ public static class TimeEntryEndpoints
                 .Select(f => new EntryFieldDto(
                     f.Id, f.FieldKey, f.Label, f.DataType, f.IsRequired, f.SortOrder,
                     f.Options.OrderBy(o => o.SortOrder)
-                        .Select(o => new EntryFieldOptionDto(o.Value, o.Label)).ToList()))
+                        .Select(o => new EntryFieldOptionDto(o.Value, o.Label, o.Icon)).ToList()))
                 .ToListAsync();
 
             return Results.Ok(fields);

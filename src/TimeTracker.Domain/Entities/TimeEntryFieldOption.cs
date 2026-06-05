@@ -15,6 +15,9 @@ public class TimeEntryFieldOption
     /// <summary>Display label for the option.</summary>
     public string Label { get; set; } = string.Empty;
 
+    /// <summary>Optional icon key (from the client icon palette) shown instead of the label.</summary>
+    public string? Icon { get; set; }
+
     public int SortOrder { get; set; }
 
     public TimeEntryField TimeEntryField { get; set; } = null!;
