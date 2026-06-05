@@ -13,7 +13,10 @@ public static class TaskEndpoints
         var api = app.MapGroup("").RequireAuthorization();
 
         // List the current user's tasks within an org.
-        api.MapGet("/api/organizations/{orgId:int}/tasks", async (int orgId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
+        // ?scope=mine (default): tasks assigned to me; assigned-by-me: tasks I created that are
+        // now assigned to someone else; all: either assigned to me OR created by me.
+        api.MapGet("/api/organizations/{orgId:int}/tasks", async (
+            int orgId, string? scope, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
             var userId = await currentUser.GetUserIdAsync();
             if (!await IsMemberAsync(db, userId, orgId))
@@ -21,9 +24,15 @@ public static class TaskEndpoints
                 return Results.Forbid();
             }
 
-            // Tasks the current user is responsible for (assigned to them).
-            var tasks = await db.Tasks
-                .Where(t => t.AssignedToUserId == userId && t.OrganizationId == orgId)
+            var baseQuery = db.Tasks.Where(t => t.OrganizationId == orgId);
+            var filtered = scope?.ToLowerInvariant() switch
+            {
+                "assigned-by-me" => baseQuery.Where(t => t.UserId == userId && t.AssignedToUserId != userId),
+                "all"            => baseQuery.Where(t => t.AssignedToUserId == userId || t.UserId == userId),
+                _                => baseQuery.Where(t => t.AssignedToUserId == userId), // "mine" (default)
+            };
+
+            var tasks = await filtered
                 .OrderBy(t => t.IsComplete).ThenByDescending(t => t.Id)
                 .Select(t => new TaskDto(t.Id, t.Title, t.Description, t.IsComplete,
                     t.EstimatedHours, t.PercentComplete, t.PercentBeforeComplete,

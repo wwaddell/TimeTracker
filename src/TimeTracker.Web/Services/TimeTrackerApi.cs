@@ -73,8 +73,12 @@ public class TimeTrackerApi(HttpClient http)
 
     // --- Tasks ---
 
-    public async Task<IReadOnlyList<TaskDto>> GetTasksAsync(int orgId) =>
-        await GetAsync<List<TaskDto>>($"/api/organizations/{orgId}/tasks") ?? [];
+    public async Task<IReadOnlyList<TaskDto>> GetTasksAsync(int orgId, string? scope = null)
+    {
+        var url = $"/api/organizations/{orgId}/tasks"
+            + (string.IsNullOrEmpty(scope) ? "" : $"?scope={Uri.EscapeDataString(scope)}");
+        return await GetAsync<List<TaskDto>>(url) ?? [];
+    }
 
     public async Task<ApiResult> CreateTaskAsync(int orgId, SaveTaskRequest request) =>
         await SendAsync(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/tasks", request));

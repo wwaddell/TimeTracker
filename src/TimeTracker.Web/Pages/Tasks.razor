@@ -53,8 +53,14 @@ else
     }
 
     <div class="d-flex justify-space-between align-center mb-3 flex-wrap" style="gap:1rem">
-        <MudText Typo="Typo.h5">My tasks</MudText>
+        <MudText Typo="Typo.h5">Tasks</MudText>
         <div class="d-flex align-center flex-wrap" style="gap:.75rem">
+            <MudSelect T="string" Value="scope" ValueChanged="OnScopeChanged" Dense="true"
+                       Margin="Margin.Dense" Variant="Variant.Outlined" Label="Show" Style="min-width:200px">
+                <MudSelectItem T="string" Value="@("mine")">Assigned to me</MudSelectItem>
+                <MudSelectItem T="string" Value="@("assigned-by-me")">I assigned to others</MudSelectItem>
+                <MudSelectItem T="string" Value="@("all")">All I'm involved in</MudSelectItem>
+            </MudSelect>
             <MudTextField T="string" @bind-Value="search" Immediate="true" Clearable="true"
                           Placeholder="Search tasks…" Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense"
@@ -123,6 +129,13 @@ else
                             <MudTooltip Text="@context.ExternalUrl">
                                 <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
                                                Href="@context.ExternalUrl" Target="_blank" />
+                            </MudTooltip>
+                        }
+                        @if (me is not null && context.AssignedToUserId != me.Id)
+                        {
+                            <MudTooltip Text="@($"Assigned to {context.AssignedToName}")">
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info"
+                                         Icon="@Icons.Material.Filled.PersonOutline">@context.AssignedToName</MudChip>
                             </MudTooltip>
                         }
                     </div>
@@ -194,6 +207,13 @@ else
 
     private string? search;
     private bool showAll; // false = active only (default)
+    private string scope = "mine"; // "mine" | "assigned-by-me" | "all"
+
+    private async Task OnScopeChanged(string value)
+    {
+        scope = value;
+        await GuardAsync(LoadAsync);
+    }
 
     private bool OrgRequiresTime =>
         organizations?.FirstOrDefault(o => o.Id == selectedOrgId)?.RequireTime ?? true;
@@ -229,7 +249,7 @@ else
 
     private async Task LoadAsync()
     {
-        tasks = await Api.GetTasksAsync(selectedOrgId);
+        tasks = await Api.GetTasksAsync(selectedOrgId, scope);
         fields = await Api.GetEntryFieldsAsync(selectedOrgId);
         projects = await Api.GetVisibleProjectsAsync(selectedOrgId);
         // Members feed the assignee picker. Falls back to "just me" if the user lacks
