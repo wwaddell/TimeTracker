@@ -21,14 +21,16 @@ public static class TaskEndpoints
                 return Results.Forbid();
             }
 
+            // Tasks the current user is responsible for (assigned to them).
             var tasks = await db.Tasks
-                .Where(t => t.UserId == userId && t.OrganizationId == orgId)
+                .Where(t => t.AssignedToUserId == userId && t.OrganizationId == orgId)
                 .OrderBy(t => t.IsComplete).ThenByDescending(t => t.Id)
                 .Select(t => new TaskDto(t.Id, t.Title, t.Description, t.IsComplete,
                     t.EstimatedHours, t.PercentComplete, t.PercentBeforeComplete,
                     t.Priority, t.DueDate, t.Project,
                     t.ProjectId, t.ProjectEntity != null ? t.ProjectEntity.Name : null,
                     t.ReferenceCode, t.ExternalUrl,
+                    t.AssignedToUserId, t.AssignedTo.DisplayName,
                     t.CreatedUtc))
                 .ToListAsync();
 
@@ -50,9 +52,20 @@ public static class TaskEndpoints
                 return problem;
             }
 
+            // Assignee: 0 means "default to the creator"; otherwise must be a member of this org.
+            var assignedTo = request.AssignedToUserId == 0 ? userId : request.AssignedToUserId;
+            if (assignedTo != userId && !await IsMemberAsync(db, assignedTo, orgId))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["assignedToUserId"] = ["The selected assignee isn't a member of this organization."],
+                });
+            }
+
             var task = new TaskItem
             {
                 UserId = userId,
+                AssignedToUserId = assignedTo,
                 OrganizationId = orgId,
                 Title = request.Title.Trim(),
                 Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
@@ -79,8 +92,10 @@ public static class TaskEndpoints
             async (int orgId, int id, SaveTaskRequest request, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
             var userId = await currentUser.GetUserIdAsync();
-            var task = await db.Tasks
-                .FirstOrDefaultAsync(t => t.Id == id && t.OrganizationId == orgId && t.UserId == userId);
+            // Editable by the creator or the current assignee.
+            var task = await db.Tasks.FirstOrDefaultAsync(t =>
+                t.Id == id && t.OrganizationId == orgId
+                && (t.UserId == userId || t.AssignedToUserId == userId));
             if (task is null)
             {
                 return Results.NotFound();
@@ -89,6 +104,19 @@ public static class TaskEndpoints
             if (Validate(request) is { } problem)
             {
                 return problem;
+            }
+
+            // Assignee change: 0 means "leave unchanged"; otherwise validate org membership.
+            if (request.AssignedToUserId != 0 && request.AssignedToUserId != task.AssignedToUserId)
+            {
+                if (!await IsMemberAsync(db, request.AssignedToUserId, orgId))
+                {
+                    return Results.ValidationProblem(new Dictionary<string, string[]>
+                    {
+                        ["assignedToUserId"] = ["The selected assignee isn't a member of this organization."],
+                    });
+                }
+                task.AssignedToUserId = request.AssignedToUserId;
             }
 
             // Authoritative save: persist exactly what the caller sends, normalizing so a
@@ -116,8 +144,9 @@ public static class TaskEndpoints
             async (int orgId, int id, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
             var userId = await currentUser.GetUserIdAsync();
-            var task = await db.Tasks
-                .FirstOrDefaultAsync(t => t.Id == id && t.OrganizationId == orgId && t.UserId == userId);
+            var task = await db.Tasks.FirstOrDefaultAsync(t =>
+                t.Id == id && t.OrganizationId == orgId
+                && (t.UserId == userId || t.AssignedToUserId == userId));
             if (task is null)
             {
                 return Results.NotFound();

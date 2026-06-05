@@ -24,6 +24,15 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
             .HasForeignKey(x => x.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Restrict on the assignee FK to avoid multiple cascade paths into t_task (creator→Cascade
+        // already exists). Removing a user with assigned tasks requires explicit cleanup.
+        builder.HasOne(x => x.AssignedTo)
+            .WithMany()
+            .HasForeignKey(x => x.AssignedToUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(x => new { x.AssignedToUserId, x.IsComplete });
+
         builder.HasOne(x => x.Organization)
             .WithMany()
             .HasForeignKey(x => x.OrganizationId)

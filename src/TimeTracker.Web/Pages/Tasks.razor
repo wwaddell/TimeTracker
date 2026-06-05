@@ -1,5 +1,6 @@
 @page "/tasks"
 @using TimeTracker.Contracts.Me
+@using TimeTracker.Contracts.Members
 @using TimeTracker.Contracts.Projects
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Contracts.Tasks
@@ -187,6 +188,7 @@ else
     private IReadOnlyList<TaskDto>? tasks;
     private IReadOnlyList<EntryFieldDto>? fields;
     private IReadOnlyList<ProjectPickerDto>? projects;
+    private IReadOnlyList<MemberDto>? members;
     private int selectedOrgId;
     private string? loadError;
 
@@ -230,6 +232,18 @@ else
         tasks = await Api.GetTasksAsync(selectedOrgId);
         fields = await Api.GetEntryFieldsAsync(selectedOrgId);
         projects = await Api.GetVisibleProjectsAsync(selectedOrgId);
+        // Members feed the assignee picker. Falls back to "just me" if the user lacks
+        // ManageUsers (a future endpoint should expose a member roster to any member).
+        try
+        {
+            members = await Api.GetMembersAsync(selectedOrgId);
+        }
+        catch
+        {
+            members = me is null
+                ? []
+                : [new MemberDto(me.Id, me.Email, me.DisplayName, false, true, [])];
+        }
     }
 
     private async Task OpenDialogAsync(TaskDto? task)
@@ -239,6 +253,8 @@ else
             { x => x.OrgId, selectedOrgId },
             { x => x.Existing, task },
             { x => x.Projects, projects ?? [] },
+            { x => x.Members, members ?? [] },
+            { x => x.CurrentUserId, me?.Id ?? 0 },
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
         var dialog = await DialogService.ShowAsync<TaskDialog>(task is null ? "New task" : "Edit task", parameters, options);

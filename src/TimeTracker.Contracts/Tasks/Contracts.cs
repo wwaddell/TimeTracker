@@ -18,6 +18,8 @@ public record TaskDto(
     string? ProjectName,
     string? ReferenceCode,
     string? ExternalUrl,
+    int AssignedToUserId,
+    string AssignedToName,
     DateTime CreatedUtc);
 
 /// <summary>Create/update payload for a task.</summary>
@@ -49,4 +51,10 @@ public record SaveTaskRequest
 
     /// <summary>Optional external URL (e.g. the task's page in another system).</summary>
     public string? ExternalUrl { get; init; }
+
+    /// <summary>
+    /// Assignee user id. 0 means "default to the current user" (new task) or "leave unchanged"
+    /// (update). Otherwise the user must be a member of the same organization.
+    /// </summary>
+    public int AssignedToUserId { get; init; }
 }

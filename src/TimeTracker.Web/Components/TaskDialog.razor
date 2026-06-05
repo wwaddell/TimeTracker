@@ -1,3 +1,4 @@
+@using TimeTracker.Contracts.Members
 @using TimeTracker.Contracts.Projects
 @using TimeTracker.Contracts.Tasks
 @using TimeTracker.Contracts.TimeEntries
@@ -18,6 +19,17 @@
                 @foreach (var p in Projects)
                 {
                     <MudSelectItem T="int?" Value="@((int?)p.Id)">@p.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        @if (Members is { Count: > 0 })
+        {
+            <MudSelect T="int" Label="Assigned to" @bind-Value="assignedToUserId" Variant="Variant.Outlined" Class="mb-3">
+                @foreach (var m in Members)
+                {
+                    <MudSelectItem T="int" Value="@m.UserId">
+                        @m.DisplayName@(m.IsPending ? " (pending)" : "")
+                    </MudSelectItem>
                 }
             </MudSelect>
         }
@@ -77,6 +89,12 @@
     /// <summary>Projects the current user can pick (caller fetches via GetVisibleProjectsAsync).</summary>
     [Parameter] public IReadOnlyList<ProjectPickerDto> Projects { get; set; } = [];
 
+    /// <summary>Org members for the assignee picker.</summary>
+    [Parameter] public IReadOnlyList<MemberDto> Members { get; set; } = [];
+
+    /// <summary>Default assignee on a new task (the current user).</summary>
+    [Parameter] public int CurrentUserId { get; set; }
+
     private string title = string.Empty;
     private string? description;
     private bool isComplete;
@@ -88,6 +106,7 @@
     private int? projectId;
     private string? referenceCode;
     private string? externalUrl;
+    private int assignedToUserId;
     private bool saving;
     private string? error;
 
@@ -106,6 +125,12 @@
             projectId = t.ProjectId;
             referenceCode = t.ReferenceCode;
             externalUrl = t.ExternalUrl;
+            assignedToUserId = t.AssignedToUserId;
+        }
+        else
+        {
+            // New task → default to the current user (who must be in the members list).
+            assignedToUserId = CurrentUserId;
         }
     }
 
@@ -134,6 +159,7 @@
                 ProjectId = projectId,
                 ReferenceCode = referenceCode,
                 ExternalUrl = externalUrl,
+                AssignedToUserId = assignedToUserId,
             };
             var result = Existing is null
                 ? await Api.CreateTaskAsync(OrgId, request)

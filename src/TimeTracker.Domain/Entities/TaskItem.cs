@@ -9,7 +9,16 @@ namespace TimeTracker.Domain.Entities;
 public class TaskItem : AuditableEntity, ISoftDeletable
 {
     public int Id { get; set; }
+
+    /// <summary>The user who created the task. Stays fixed; ownership is via <see cref="AssignedToUserId"/>.</summary>
     public int UserId { get; set; }
+
+    /// <summary>
+    /// The user the task is assigned to. New tasks default to the creator; reassigning moves the
+    /// task off the original assignee's list onto the new assignee's.
+    /// </summary>
+    public int AssignedToUserId { get; set; }
+    public User AssignedTo { get; set; } = null!;
 
     /// <summary>Optional org the task belongs to (null = personal/unassigned).</summary>
     public int? OrganizationId { get; set; }
