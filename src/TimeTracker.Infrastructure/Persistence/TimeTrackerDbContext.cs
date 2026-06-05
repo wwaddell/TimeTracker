@@ -24,6 +24,8 @@ public class TimeTrackerDbContext(DbContextOptions<TimeTrackerDbContext> options
     public DbSet<TimeEntryFieldOption> TimeEntryFieldOptions => Set<TimeEntryFieldOption>();
     public DbSet<TimeEntryAttribute> TimeEntryAttributes => Set<TimeEntryAttribute>();
     public DbSet<FieldDataTypeLookup> FieldDataTypes => Set<FieldDataTypeLookup>();
+    public DbSet<CalendarSeriesTag> CalendarSeriesTags => Set<CalendarSeriesTag>();
+    public DbSet<CalendarSeriesTagAttribute> CalendarSeriesTagAttributes => Set<CalendarSeriesTagAttribute>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

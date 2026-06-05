@@ -1,0 +1,369 @@
+@page "/import"
+@using TimeTracker.Contracts.Calendar
+@using TimeTracker.Contracts.Tasks
+@using TimeTracker.Contracts.TimeEntries
+@using TimeTracker.Web.Services
+@inject TimeTrackerApi Api
+@inject ISnackbar Snackbar
+
+@if (loadError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <div class="d-flex align-center justify-space-between" style="gap:1rem">
+            <span>@loadError</span>
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAllAsync">Retry</MudButton>
+        </div>
+    </MudAlert>
+}
+
+@if (organizations is null)
+{
+    @if (loadError is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+}
+else if (organizations.Count == 0)
+{
+    <MudAlert Severity="Severity.Warning">No organizations available for your account.</MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h5" Class="mb-1">Import from Outlook</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+        Pull calendar meetings into your time log. Recurring meetings you tag are remembered for next time.
+    </MudText>
+
+    <MudPaper Class="pa-4 mb-4" Outlined="true">
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="int" Label="Organization" Value="selectedOrgId" ValueChanged="OnOrgChanged"
+                           Variant="Variant.Outlined" Dense="true">
+                    @foreach (var org in organizations)
+                    {
+                        <MudSelectItem T="int" Value="@org.Id">@org.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudDatePicker Label="From" @bind-Date="fromDate" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudDatePicker Label="To" @bind-Date="toDate" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" sm="2" Class="d-flex align-center">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                           StartIcon="@Icons.Material.Filled.CloudSync"
+                           OnClick="FetchAsync" Disabled="fetching">
+                    @(fetching ? "Fetching…" : "Fetch")
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+
+        <MudExpansionPanels Class="mt-3" Elevation="0">
+            <MudExpansionPanel Text="Outlook connection (developer)" Dense="true">
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                    Once an Entra app registration exists, a one-click <b>Connect Outlook</b> button will live here.
+                    For now (dev): leave the token blank or type <b>FAKE</b> to use sample meetings, or paste a real
+                    Microsoft Graph token (e.g. from Graph Explorer) to read your actual calendar.
+                </MudText>
+                <MudTextField T="string" @bind-Value="accessToken" Label="Graph access token (optional in dev)"
+                              Variant="Variant.Outlined" Lines="2" AutoGrow="true" MaxLines="4"
+                              Placeholder="Blank or FAKE = sample data" />
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+    </MudPaper>
+
+    @if (usingSampleData)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+            Showing <b>sample</b> meetings (no real calendar connected). Connect Outlook or paste a Graph token to import your own.
+        </MudAlert>
+    }
+
+    @if (fetching)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (rows is not null)
+    {
+        @if (rows.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No meetings found in this range.</MudText>
+        }
+        else
+        {
+            <div class="d-flex justify-space-between align-center mb-2">
+                <MudText Typo="Typo.subtitle1">@rows.Count meeting@(rows.Count == 1 ? "" : "s") found</MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
+                           OnClick="ImportAsync" Disabled="@(importing || SelectedCount == 0)">
+                    @(importing ? "Importing…" : $"Import {SelectedCount} selected")
+                </MudButton>
+            </div>
+
+            <MudTable Items="rows" Hover="true" Dense="true" Elevation="1" Class="mb-4">
+                <HeaderContent>
+                    <MudTh Style="width:1px"></MudTh>
+                    <MudTh>Meeting</MudTh>
+                    <MudTh Style="width:1px; white-space:nowrap">When</MudTh>
+                    <MudTh Style="width:220px">Task</MudTh>
+                    <MudTh Style="width:1px; white-space:nowrap">Whole series</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>
+                        <MudCheckBox T="bool" Value="@context.Selected" Dense="true"
+                                     Disabled="@context.Meeting.AlreadyImported"
+                                     ValueChanged="@(v => context.Selected = v)" />
+                    </MudTd>
+                    <MudTd>
+                        <div class="d-flex align-center" style="gap:.4rem">
+                            <MudText Typo="Typo.body2"
+                                     Style="@(context.Meeting.AlreadyImported ? "opacity:.6" : "")">
+                                <b>@context.Meeting.Subject</b>
+                            </MudText>
+                            @if (context.Meeting.IsRecurring)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info"
+                                         Icon="@Icons.Material.Filled.Repeat">Recurring</MudChip>
+                            }
+                            @if (context.Meeting.AlreadyImported)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success"
+                                         Icon="@Icons.Material.Filled.Check">Imported</MudChip>
+                            }
+                            @if (context.Meeting.IsAllDay)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">All-day</MudChip>
+                            }
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(context.Meeting.OrganizerName))
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Meeting.OrganizerName</MudText>
+                        }
+                    </MudTd>
+                    <MudTd Style="white-space:nowrap">
+                        <MudText Typo="Typo.body2">@context.Meeting.EntryDate.ToString("ddd MMM d")</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @context.Meeting.StartTime.ToString("HH:mm") · @context.Meeting.DurationMinutes min
+                        </MudText>
+                    </MudTd>
+                    <MudTd>
+                        @if (tasks is { Count: > 0 } && !context.Meeting.AlreadyImported)
+                        {
+                            <MudSelect T="int?" Value="context.TaskId" Clearable="true" Dense="true" Margin="Margin.Dense"
+                                       Variant="Variant.Outlined" ToStringFunc="@TaskToString"
+                                       ValueChanged="@(v => OnTaskChanged(context, v))" Placeholder="No task">
+                                @foreach (var task in tasks)
+                                {
+                                    <MudSelectItem T="int?" Value="@((int?)task.Id)">@task.Title</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                    </MudTd>
+                    <MudTd Style="white-space:nowrap">
+                        @if (context.Meeting.IsRecurring && !context.Meeting.AlreadyImported)
+                        {
+                            <MudTooltip Text="Remember this task for the whole meeting series and future imports">
+                                <MudSwitch T="bool" Value="@context.ApplyToSeries" Color="Color.Primary" Dense="true"
+                                           ValueChanged="@(v => OnApplyToSeriesChanged(context, v))" />
+                            </MudTooltip>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    }
+}
+
+@code {
+    private IReadOnlyList<OrganizationDto>? organizations;
+    private IReadOnlyList<TaskDto>? tasks;
+    private int selectedOrgId;
+    private string? loadError;
+
+    private DateTime? fromDate = DateTime.Today.AddDays(-7);
+    private DateTime? toDate = DateTime.Today;
+    private string? accessToken;
+
+    private bool fetching;
+    private bool importing;
+    private bool usingSampleData;
+    private List<Row>? rows;
+
+    private int SelectedCount => rows?.Count(r => r.Selected && !r.Meeting.AlreadyImported) ?? 0;
+
+    protected override Task OnInitializedAsync() => ReloadAllAsync();
+
+    private Task ReloadAllAsync() => GuardAsync(async () =>
+    {
+        organizations = await Api.GetOrganizationsAsync();
+        if (organizations.Count > 0)
+        {
+            if (selectedOrgId == 0)
+            {
+                selectedOrgId = organizations[0].Id;
+            }
+            tasks = await Api.GetTasksAsync(selectedOrgId);
+        }
+    });
+
+    private async Task OnOrgChanged(int orgId)
+    {
+        selectedOrgId = orgId;
+        rows = null;
+        usingSampleData = false;
+        await GuardAsync(async () => tasks = await Api.GetTasksAsync(selectedOrgId));
+    }
+
+    private async Task FetchAsync()
+    {
+        if (fromDate is not { } from || toDate is not { } to)
+        {
+            Snackbar.Add("Pick a date range first.", Severity.Warning);
+            return;
+        }
+
+        fetching = true;
+        loadError = null;
+        try
+        {
+            var request = new CalendarPreviewRequest
+            {
+                From = DateOnly.FromDateTime(from),
+                To = DateOnly.FromDateTime(to),
+                AccessToken = accessToken,
+            };
+            var result = await Api.PreviewCalendarAsync(selectedOrgId, request);
+            usingSampleData = result.UsingSampleData;
+            rows = result.Meetings.Select(m => new Row
+            {
+                Meeting = m,
+                Selected = m.Recommended,
+                TaskId = m.SuggestedTaskId,
+            }).ToList();
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex.Message;
+            rows = null;
+        }
+        finally
+        {
+            fetching = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        var chosen = rows?.Where(r => r.Selected && !r.Meeting.AlreadyImported).ToList() ?? [];
+        if (chosen.Count == 0)
+        {
+            return;
+        }
+
+        importing = true;
+        try
+        {
+            var request = new CalendarImportRequest
+            {
+                Meetings = chosen.Select(r => new ImportMeetingRequest
+                {
+                    SeriesUid = r.Meeting.SeriesUid,
+                    EventId = r.Meeting.EventId,
+                    OccurrenceStartUtc = r.Meeting.OccurrenceStartUtc,
+                    Subject = r.Meeting.Subject,
+                    EntryDate = r.Meeting.EntryDate,
+                    StartTime = r.Meeting.StartTime,
+                    DurationMinutes = r.Meeting.DurationMinutes,
+                    IsRecurring = r.Meeting.IsRecurring,
+                    TaskId = r.TaskId,
+                    // Carry remembered field values onto the entry (and series tag if applying).
+                    Attributes = r.Meeting.SuggestedAttributes.ToDictionary(a => a.FieldId, a => a.Value),
+                    ApplyToSeries = r.ApplyToSeries,
+                }).ToList(),
+            };
+
+            var result = await Api.ImportCalendarAsync(selectedOrgId, request);
+            var msg = result.Skipped > 0
+                ? $"Imported {result.Imported}, skipped {result.Skipped} already-logged."
+                : $"Imported {result.Imported} entr{(result.Imported == 1 ? "y" : "ies")}.";
+            Snackbar.Add(msg, Severity.Success);
+
+            // Re-fetch so imported rows now show as logged (and can't be imported again).
+            await FetchAsync();
+        }
+        catch (ApiException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            importing = false;
+        }
+    }
+
+    // When a recurring meeting's task is set with "whole series" on, propagate to its siblings
+    // visible in this list so the whole series imports consistently.
+    private void OnTaskChanged(Row row, int? taskId)
+    {
+        row.TaskId = taskId;
+        if (row.ApplyToSeries)
+        {
+            PropagateToSeries(row);
+        }
+    }
+
+    private void OnApplyToSeriesChanged(Row row, bool value)
+    {
+        row.ApplyToSeries = value;
+        if (value)
+        {
+            PropagateToSeries(row);
+        }
+    }
+
+    private void PropagateToSeries(Row row)
+    {
+        if (rows is null)
+        {
+            return;
+        }
+
+        foreach (var sibling in rows.Where(r =>
+            r != row && r.Meeting.SeriesUid == row.Meeting.SeriesUid && !r.Meeting.AlreadyImported))
+        {
+            sibling.TaskId = row.TaskId;
+            sibling.ApplyToSeries = true;
+            sibling.Selected = sibling.Selected || row.Selected;
+        }
+    }
+
+    private string TaskToString(int? id) =>
+        tasks?.FirstOrDefault(t => t.Id == id)?.Title ?? string.Empty;
+
+    private async Task GuardAsync(Func<Task> action)
+    {
+        try
+        {
+            loadError = null;
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex.Message;
+        }
+        catch (Exception)
+        {
+            loadError = "Something went wrong. Please retry.";
+        }
+    }
+
+    private sealed class Row
+    {
+        public CalendarMeetingDto Meeting { get; init; } = default!;
+        public bool Selected { get; set; }
+        public int? TaskId { get; set; }
+        public bool ApplyToSeries { get; set; }
+    }
+}

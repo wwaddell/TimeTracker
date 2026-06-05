@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using TimeTracker.Contracts;
 using TimeTracker.Contracts.Admin;
+using TimeTracker.Contracts.Calendar;
 using TimeTracker.Contracts.Members;
 using TimeTracker.Contracts.Organizations;
 using TimeTracker.Contracts.Rights;
@@ -126,6 +127,16 @@ public class TimeTrackerApi(HttpClient http)
     public async Task<ApiResult> DeleteRoleAsync(int orgId, int roleId) =>
         await SendAsync(() => http.DeleteAsync($"/api/organizations/{orgId}/roles/{roleId}"));
 
+    // --- Calendar import (Outlook via Graph) ---
+
+    public async Task<CalendarPreviewResult> PreviewCalendarAsync(int orgId, CalendarPreviewRequest request) =>
+        await PostAsync<CalendarPreviewResult>($"/api/organizations/{orgId}/calendar/preview", request)
+        ?? new CalendarPreviewResult();
+
+    public async Task<CalendarImportResult> ImportCalendarAsync(int orgId, CalendarImportRequest request) =>
+        await PostAsync<CalendarImportResult>($"/api/organizations/{orgId}/calendar/import", request)
+        ?? new CalendarImportResult(0, 0);
+
     // --- Plumbing ---
 
     private async Task<T?> GetAsync<T>(string url)
@@ -134,6 +145,35 @@ public class TimeTrackerApi(HttpClient http)
         try
         {
             response = await http.GetAsync(url);
+        }
+        catch (Exception ex)
+        {
+            throw new ApiException(ConnectionError(ex), ex);
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var problem = await TryReadProblemAsync(response);
+            throw new ApiException(problem ?? ServerError(response));
+        }
+
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<T>();
+        }
+        catch (Exception ex)
+        {
+            throw new ApiException("The server sent an unexpected response.", ex);
+        }
+    }
+
+    // POST that returns a typed body, surfacing failures as ApiException (like GetAsync).
+    private async Task<T?> PostAsync<T>(string url, object body)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.PostAsJsonAsync(url, body);
         }
         catch (Exception ex)
         {

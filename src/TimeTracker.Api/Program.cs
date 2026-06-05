@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using TimeTracker.Api;
 using TimeTracker.Api.Auth;
+using TimeTracker.Api.Calendar;
 using TimeTracker.Api.Endpoints;
 using TimeTracker.Infrastructure;
 using TimeTracker.Infrastructure.Persistence;
@@ -15,6 +16,10 @@ builder.Services.AddProblemDetails();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+
+// Calendar import reads Outlook via Microsoft Graph, server-to-server, with a per-call token.
+builder.Services.AddHttpClient<ICalendarSource, GraphCalendarSource>(client =>
+    client.BaseAddress = new Uri("https://graph.microsoft.com/v1.0/"));
 
 builder.Services.AddCors(options =>
 {
@@ -103,5 +108,6 @@ app.MapRightsEndpoints();
 app.MapOrganizationEndpoints();
 app.MapMemberEndpoints();
 app.MapRoleEndpoints();
+app.MapCalendarEndpoints();
 
 app.Run();

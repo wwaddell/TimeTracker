@@ -1,3 +1,5 @@
+using TimeTracker.Domain.Enums;
+
 namespace TimeTracker.Domain.Entities;
 
 /// <summary>
@@ -12,6 +14,24 @@ public class TimeEntry : AuditableEntity
 
     /// <summary>Optional task this entry is logged against.</summary>
     public int? TaskId { get; set; }
+
+    /// <summary>How this entry was created (manual vs. an external import).</summary>
+    public TimeEntrySource Source { get; set; } = TimeEntrySource.Manual;
+
+    /// <summary>
+    /// For imported entries, the calendar series identity (Graph <c>iCalUId</c>).
+    /// The same for every occurrence of a recurring meeting — the key for series tagging.
+    /// </summary>
+    public string? SourceSeriesUid { get; set; }
+
+    /// <summary>For imported entries, the source occurrence id (Graph event <c>id</c>).</summary>
+    public string? SourceEventId { get; set; }
+
+    /// <summary>
+    /// For imported entries, the specific occurrence's start instant (UTC). Combined with
+    /// <see cref="SourceSeriesUid"/> this uniquely identifies an occurrence for de-duplication.
+    /// </summary>
+    public DateTime? SourceOccurrenceStartUtc { get; set; }
 
     /// <summary>Date the activity occurred (defaults to today, editable).</summary>
     public DateOnly EntryDate { get; set; }
