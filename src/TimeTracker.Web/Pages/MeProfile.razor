@@ -1,0 +1,277 @@
+@page "/me"
+@using TimeTracker.Contracts.Calendar
+@using TimeTracker.Contracts.Me
+@using TimeTracker.Contracts.TimeEntries
+@using TimeTracker.Web.Services
+@inject TimeTrackerApi Api
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Profile</PageTitle>
+
+@if (loadError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <div class="d-flex align-center justify-space-between" style="gap:1rem">
+            <span>@loadError</span>
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAsync">Retry</MudButton>
+        </div>
+    </MudAlert>
+}
+
+<MudText Typo="Typo.h5" Class="mb-1">My profile</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Your account, connected services, and the organizations you belong to.
+</MudText>
+
+@* --- Account --- *@
+<MudText Typo="Typo.subtitle1" Class="mb-2">Account</MudText>
+<MudPaper Class="pa-4 mb-4" Outlined="true">
+    @if (me is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Display name</MudText>
+                <MudText Typo="Typo.body1"><b>@me.DisplayName</b></MudText>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Email</MudText>
+                <MudText Typo="Typo.body1">@me.Email</MudText>
+            </MudItem>
+            @if (me.IsGlobalAdmin)
+            {
+                <MudItem xs="12">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info"
+                             Icon="@Icons.Material.Filled.Public">Global administrator</MudChip>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudPaper>
+
+@* --- Connected accounts --- *@
+<MudText Typo="Typo.subtitle1" Class="mb-2">Connected accounts</MudText>
+<MudPaper Class="pa-4 mb-4" Outlined="true">
+    @if (connection is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else
+    {
+        <div class="d-flex align-center justify-space-between flex-wrap" style="gap:1rem">
+            <div class="d-flex align-center" style="gap:.75rem; min-width:0">
+                <MudIcon Icon="@Icons.Material.Filled.CalendarMonth"
+                         Color="@(connection.Connected ? Color.Success : Color.Default)" />
+                <div style="min-width:0">
+                    <MudText Typo="Typo.body1"><b>Outlook calendar</b></MudText>
+                    @if (connection.Connected)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Connected@(string.IsNullOrWhiteSpace(connection.AccountEmail) ? "" : $" as {connection.AccountEmail}")@(connection.LastSyncUtc is { } t ? $" · last read {t.ToLocalTime():g}" : "")
+                        </MudText>
+                    }
+                    else if (connection.Configured)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Not connected. Connect to import your meetings as time entries.
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Outlook isn't set up on the server yet — sample data is used in dev. Ask an administrator to register an Entra app.
+                        </MudText>
+                    }
+                </div>
+            </div>
+
+            <div class="d-flex align-center flex-wrap" style="gap:.5rem">
+                @if (connection.Connected)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.LinkOff" OnClick="DisconnectAsync">Disconnect</MudButton>
+                }
+                else if (connection.Configured)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Link" OnClick="ConnectAsync" Disabled="connecting">
+                        Connect Outlook
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.AdminPanelSettings" OnClick="RequestAdminConsentAsync">
+                        Request admin consent
+                    </MudButton>
+                }
+            </div>
+        </div>
+    }
+</MudPaper>
+
+@* --- Organizations --- *@
+<MudText Typo="Typo.subtitle1" Class="mb-2">Organizations</MudText>
+<MudPaper Class="pa-2 mb-4" Outlined="true">
+    @if (organizations is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (organizations.Count == 0)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary pa-2">You aren't a member of any organization yet.</MudText>
+    }
+    else
+    {
+        <MudList T="string" Dense="true">
+            @foreach (var org in organizations)
+            {
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Business">
+                    <MudText Typo="Typo.body2"><b>@org.Name</b></MudText>
+                    @if (!string.IsNullOrWhiteSpace(org.RoleName))
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@org.RoleName</MudText>
+                    }
+                </MudListItem>
+            }
+        </MudList>
+    }
+</MudPaper>
+
+@code {
+    private MeDto? me;
+    private CalendarConnectionStatusDto? connection;
+    private IReadOnlyList<OrganizationDto>? organizations;
+    private int connectionOrgId; // any org the user belongs to is fine: the calendar connection is per-user
+    private bool connecting;
+    private string? loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+        HandleReturnParams();
+    }
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            loadError = null;
+            me = await Api.GetMeAsync();
+            organizations = await Api.GetOrganizationsAsync();
+            if (organizations.Count > 0)
+            {
+                // The connection endpoints are scoped to an org for the membership check, but the
+                // stored CalendarConnection itself is per-user. Any org the user belongs to works.
+                connectionOrgId = organizations[0].Id;
+                connection = await Api.GetCalendarConnectionAsync(connectionOrgId);
+            }
+            else
+            {
+                connection = new CalendarConnectionStatusDto(false, null, false, null);
+            }
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex.Message;
+        }
+        catch
+        {
+            loadError = "Something went wrong loading your profile. Please retry.";
+        }
+    }
+
+    private async Task ConnectAsync()
+    {
+        connecting = true;
+        try
+        {
+            var resp = await Api.GetCalendarConnectUrlAsync(connectionOrgId);
+            if (resp is not null)
+            {
+                Nav.NavigateTo(resp.Url, forceLoad: true); // hand off to Microsoft sign-in
+            }
+        }
+        catch (ApiException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            connecting = false;
+        }
+    }
+
+    private async Task RequestAdminConsentAsync()
+    {
+        try
+        {
+            var resp = await Api.GetCalendarAdminConsentUrlAsync(connectionOrgId);
+            if (resp is not null)
+            {
+                Nav.NavigateTo(resp.Url, forceLoad: true);
+            }
+        }
+        catch (ApiException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task DisconnectAsync()
+    {
+        var result = await Api.DisconnectCalendarAsync(connectionOrgId);
+        if (result.Success)
+        {
+            Snackbar.Add("Outlook disconnected.", Severity.Success);
+            connection = await Api.GetCalendarConnectionAsync(connectionOrgId);
+        }
+        else
+        {
+            Snackbar.Add(result.Error ?? "Couldn't disconnect.", Severity.Error);
+        }
+    }
+
+    // Surface the OAuth callback outcome (?connected / ?adminConsent), then strip the query.
+    private void HandleReturnParams()
+    {
+        var query = new Uri(Nav.Uri).Query;
+        if (string.IsNullOrEmpty(query))
+        {
+            return;
+        }
+
+        var q = QueryValues(query);
+        var handled = false;
+        if (q.TryGetValue("connected", out var c))
+        {
+            Snackbar.Add(c == "ok" ? "Outlook connected." : "Couldn't connect Outlook.",
+                c == "ok" ? Severity.Success : Severity.Error);
+            handled = true;
+        }
+        if (q.TryGetValue("adminConsent", out var a))
+        {
+            Snackbar.Add(a == "ok" ? "Admin consent granted — users can now connect." : "Admin consent was not granted.",
+                a == "ok" ? Severity.Success : Severity.Error);
+            handled = true;
+        }
+
+        if (handled)
+        {
+            Nav.NavigateTo("me", replace: true); // drop the query params
+        }
+    }
+
+    private static Dictionary<string, string> QueryValues(string query)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = pair.Split('=', 2);
+            result[Uri.UnescapeDataString(kv[0])] = kv.Length > 1 ? Uri.UnescapeDataString(kv[1]) : "";
+        }
+        return result;
+    }
+}

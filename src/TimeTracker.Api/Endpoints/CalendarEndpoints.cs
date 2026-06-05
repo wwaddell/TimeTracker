@@ -328,12 +328,12 @@ public static class CalendarEndpoints
             if (q.ContainsKey("admin_consent"))
             {
                 var ok = string.Equals(q["admin_consent"], "True", StringComparison.OrdinalIgnoreCase);
-                return Results.Redirect($"{webBase}/import?adminConsent={(ok ? "ok" : "error")}");
+                return Results.Redirect($"{webBase}/me?adminConsent={(ok ? "ok" : "error")}");
             }
 
             if (q.ContainsKey("error"))
             {
-                return Results.Redirect($"{webBase}/import?connected=error");
+                return Results.Redirect($"{webBase}/me?connected=error");
             }
 
             int userId;
@@ -342,23 +342,23 @@ public static class CalendarEndpoints
                 var payload = StateProtector(dp).Unprotect(q["state"].ToString());
                 if (!payload.StartsWith("u:") || !int.TryParse(payload[2..], out userId))
                 {
-                    return Results.Redirect($"{webBase}/import?connected=error");
+                    return Results.Redirect($"{webBase}/me?connected=error");
                 }
             }
             catch
             {
-                return Results.Redirect($"{webBase}/import?connected=error");
+                return Results.Redirect($"{webBase}/me?connected=error");
             }
 
             try
             {
                 var t = await oauth.RedeemCodeAsync(q["code"].ToString(), RedirectUri(graphOptions.Value, http));
                 await tokens.SaveConnectionAsync(userId, t);
-                return Results.Redirect($"{webBase}/import?connected=ok");
+                return Results.Redirect($"{webBase}/me?connected=ok");
             }
             catch (CalendarSourceException)
             {
-                return Results.Redirect($"{webBase}/import?connected=error");
+                return Results.Redirect($"{webBase}/me?connected=error");
             }
         }).AllowAnonymous();
     }

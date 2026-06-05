@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using TimeTracker.Contracts;
 using TimeTracker.Contracts.Admin;
 using TimeTracker.Contracts.Calendar;
+using TimeTracker.Contracts.Me;
 using TimeTracker.Contracts.Members;
 using TimeTracker.Contracts.Organizations;
 using TimeTracker.Contracts.Rights;
@@ -14,6 +15,10 @@ namespace TimeTracker.Web.Services;
 /// <summary>Typed wrapper over the TimeTracker Web API with friendly error handling.</summary>
 public class TimeTrackerApi(HttpClient http)
 {
+    // --- Me / profile ---
+
+    public async Task<MeDto?> GetMeAsync() => await GetAsync<MeDto>("/api/me");
+
     // --- Time logging ---
 
     public async Task<IReadOnlyList<OrganizationDto>> GetOrganizationsAsync() =>
