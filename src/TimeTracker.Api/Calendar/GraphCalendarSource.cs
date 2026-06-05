@@ -124,7 +124,9 @@ public sealed class GraphCalendarSource(HttpClient http) : ICalendarSource
         HttpStatusCode.Unauthorized =>
             "Outlook rejected the access token (it may be expired or for the wrong resource). Reconnect or paste a fresh token.",
         HttpStatusCode.Forbidden =>
-            "Access to the calendar was denied. The app may need admin consent for Calendars.Read in your organization.",
+            "Outlook denied access (403). Most often the token is missing the Calendars.Read scope — in Graph Explorer, "
+            + "consent to Calendars.Read, run a calendar query, then copy a fresh token (check it at jwt.ms: the 'scp' claim "
+            + "should list Calendars.Read). If you can't grant that scope, your organization requires admin consent for it.",
         HttpStatusCode.TooManyRequests =>
             "Microsoft Graph is throttling requests. Wait a moment and try again.",
         _ => $"Microsoft Graph returned an error ({(int)status} {status}).",
