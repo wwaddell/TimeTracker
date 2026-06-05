@@ -19,6 +19,9 @@ public class TimeTrackerApi(HttpClient http)
 
     public async Task<MeDto?> GetMeAsync() => await GetAsync<MeDto>("/api/me");
 
+    public async Task<ApiResult> SaveMePreferencesAsync(SaveMePreferencesRequest request) =>
+        await SendAsync(() => http.PutAsJsonAsync("/api/me/preferences", request));
+
     // --- Time logging ---
 
     public async Task<IReadOnlyList<OrganizationDto>> GetOrganizationsAsync() =>

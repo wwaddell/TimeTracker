@@ -1,4 +1,5 @@
 @page "/tasks"
+@using TimeTracker.Contracts.Me
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Contracts.Tasks
 @using TimeTracker.Domain.Enums
@@ -35,15 +36,19 @@ else if (organizations.Count == 0)
 }
 else
 {
-    <MudSelect T="int" Label="Organization" Value="selectedOrgId" ValueChanged="OnOrgChanged"
-               Variant="Variant.Outlined" Class="mb-4" Style="max-width:420px">
-        @foreach (var org in organizations)
-        {
-            <MudSelectItem T="int" Value="@org.Id">
-                @org.Name@(org.RoleName is null ? "" : $" — {org.RoleName}")
-            </MudSelectItem>
-        }
-    </MudSelect>
+    @* Hide the org switcher when the user only belongs to one org, or has opted to hide it. *@
+    @if (organizations.Count > 1 && me?.HideOrgSwitcher != true)
+    {
+        <MudSelect T="int" Label="Organization" Value="selectedOrgId" ValueChanged="OnOrgChanged"
+                   Variant="Variant.Outlined" Class="mb-4" Style="max-width:420px">
+            @foreach (var org in organizations)
+            {
+                <MudSelectItem T="int" Value="@org.Id">
+                    @org.Name@(org.RoleName is null ? "" : $" — {org.RoleName}")
+                </MudSelectItem>
+            }
+        </MudSelect>
+    }
 
     <div class="d-flex justify-space-between align-center mb-3 flex-wrap" style="gap:1rem">
         <MudText Typo="Typo.h5">My tasks</MudText>
@@ -157,6 +162,7 @@ else
 
 @code {
     private IReadOnlyList<OrganizationDto>? organizations;
+    private MeDto? me;
     private IReadOnlyList<TaskDto>? tasks;
     private IReadOnlyList<EntryFieldDto>? fields;
     private int selectedOrgId;
@@ -180,6 +186,7 @@ else
     private Task ReloadAllAsync() => GuardAsync(async () =>
     {
         organizations = await Api.GetOrganizationsAsync();
+        me ??= await Api.GetMeAsync(); // for HideOrgSwitcher preference
         if (organizations.Count > 0)
         {
             if (selectedOrgId == 0)

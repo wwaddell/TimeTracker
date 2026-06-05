@@ -21,5 +21,11 @@ public class User : AuditableEntity
     /// <summary>Platform-level administrator: can create/manage organizations and assign their admins.</summary>
     public bool IsGlobalAdmin { get; set; }
 
+    /// <summary>
+    /// When true, the org switcher is hidden on Log Time/Tasks and the user's default org
+    /// (the membership flagged <see cref="UserOrganization.IsDefault"/>) is used.
+    /// </summary>
+    public bool HideOrgSwitcher { get; set; }
+
     public ICollection<UserOrganization> Organizations { get; set; } = new List<UserOrganization>();
 }

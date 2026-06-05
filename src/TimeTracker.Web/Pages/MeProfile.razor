@@ -1,6 +1,7 @@
 @page "/me"
 @using TimeTracker.Contracts.Calendar
 @using TimeTracker.Contracts.Me
+@using TimeTracker.Contracts.Organizations
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Web.Services
 @inject TimeTrackerApi Api
@@ -53,6 +54,49 @@
         </MudGrid>
     }
 </MudPaper>
+
+@* --- Preferences --- *@
+@if (organizations is { Count: > 0 } && me is not null)
+{
+    <MudText Typo="Typo.subtitle1" Class="mb-2">Preferences</MudText>
+    <MudPaper Class="pa-4 mb-4" Outlined="true">
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="int" Label="Default organization" @bind-Value="defaultOrgId" Variant="Variant.Outlined" Dense="true">
+                    @foreach (var org in organizations)
+                    {
+                        <MudSelectItem T="int" Value="@org.Id">@org.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Pre-selected on Log Time and Tasks.
+                </MudText>
+            </MudItem>
+            <MudItem xs="12" sm="6" Class="d-flex align-center">
+                <div>
+                    <MudSwitch T="bool" @bind-Value="hideOrgSwitcher" Color="Color.Primary"
+                               Label="Hide the org switcher on Log Time / Tasks"
+                               Disabled="@(organizations.Count <= 1)" />
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        @if (organizations.Count <= 1)
+                        {
+                            <span>You only belong to one organization, so the switcher is already hidden.</span>
+                        }
+                        else
+                        {
+                            <span>When on, only the default org is used — no dropdown.</span>
+                        }
+                    </MudText>
+                </div>
+            </MudItem>
+        </MudGrid>
+        <div class="d-flex justify-end mt-3">
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SavePreferencesAsync" Disabled="@(saving || !PreferencesDirty)">
+                @(saving ? "Saving…" : "Save preferences")
+            </MudButton>
+        </div>
+    </MudPaper>
+}
 
 @* --- Connected accounts --- *@
 <MudText Typo="Typo.subtitle1" Class="mb-2">Connected accounts</MudText>
@@ -148,6 +192,14 @@
     private bool connecting;
     private string? loadError;
 
+    // Editable preferences (seeded from `me` on load).
+    private int defaultOrgId;
+    private bool hideOrgSwitcher;
+    private bool saving;
+
+    private bool PreferencesDirty =>
+        me is not null && (defaultOrgId != (me.DefaultOrganizationId ?? 0) || hideOrgSwitcher != me.HideOrgSwitcher);
+
     protected override async Task OnInitializedAsync()
     {
         await ReloadAsync();
@@ -161,6 +213,14 @@
             loadError = null;
             me = await Api.GetMeAsync();
             organizations = await Api.GetOrganizationsAsync();
+            if (me is not null)
+            {
+                hideOrgSwitcher = me.HideOrgSwitcher;
+                // Default-org dropdown: prefer the saved default; otherwise the first available org.
+                defaultOrgId = me.DefaultOrganizationId
+                    ?? organizations.FirstOrDefault()?.Id
+                    ?? 0;
+            }
             if (organizations.Count > 0)
             {
                 // The connection endpoints are scoped to an org for the membership check, but the
@@ -217,6 +277,32 @@
         catch (ApiException ex)
         {
             Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task SavePreferencesAsync()
+    {
+        saving = true;
+        try
+        {
+            var result = await Api.SaveMePreferencesAsync(new SaveMePreferencesRequest
+            {
+                DefaultOrganizationId = defaultOrgId == 0 ? null : defaultOrgId,
+                HideOrgSwitcher = hideOrgSwitcher,
+            });
+            if (result.Success)
+            {
+                Snackbar.Add("Preferences saved", Severity.Success);
+                me = await Api.GetMeAsync(); // refresh so PreferencesDirty resets
+            }
+            else
+            {
+                Snackbar.Add(result.Error ?? "Couldn't save preferences.", Severity.Error);
+            }
+        }
+        finally
+        {
+            saving = false;
         }
     }
 
