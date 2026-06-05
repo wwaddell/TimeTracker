@@ -12,7 +12,7 @@
                          Min="0" Step="0.25M" Variant="Variant.Outlined" Class="mb-3" />
         <MudText Typo="Typo.body2">% complete: <b>@percentComplete%</b></MudText>
         <MudSlider T="int" @bind-Value="percentComplete" Min="0" Max="100" Step="5" Color="Color.Primary" />
-        <MudCheckBox T="bool" Label="Complete" @bind-Value="isComplete" Class="mt-2" />
+        <MudCheckBox T="bool" Label="Complete" Value="isComplete" ValueChanged="OnCompleteChanged" Class="mt-2" />
         @if (error is not null)
         {
             <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@error</MudAlert>
@@ -88,6 +88,15 @@
         finally
         {
             saving = false;
+        }
+    }
+
+    private void OnCompleteChanged(bool value)
+    {
+        isComplete = value;
+        if (value)
+        {
+            percentComplete = 100; // completing snaps to 100%
         }
     }
 

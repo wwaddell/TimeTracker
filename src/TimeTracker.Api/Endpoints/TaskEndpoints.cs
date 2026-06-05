@@ -54,7 +54,8 @@ public static class TaskEndpoints
                 Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
                 IsComplete = request.IsComplete,
                 EstimatedHours = request.EstimatedHours,
-                PercentComplete = request.PercentComplete,
+                PercentComplete = request.IsComplete ? 100 : request.PercentComplete,
+                PercentBeforeComplete = request.IsComplete ? request.PercentComplete : null,
                 CreatedUtc = DateTime.UtcNow,
             };
             db.Tasks.Add(task);
@@ -80,11 +81,31 @@ public static class TaskEndpoints
                 return problem;
             }
 
+            var wasComplete = task.IsComplete;
             task.Title = request.Title.Trim();
             task.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
-            task.IsComplete = request.IsComplete;
             task.EstimatedHours = request.EstimatedHours;
-            task.PercentComplete = request.PercentComplete;
+
+            if (!wasComplete && request.IsComplete)
+            {
+                // Completing: remember where it was, snap to 100%.
+                task.PercentBeforeComplete = task.PercentComplete;
+                task.PercentComplete = 100;
+                task.IsComplete = true;
+            }
+            else if (wasComplete && !request.IsComplete)
+            {
+                // Reopening: revert to the percent it had before being completed.
+                task.PercentComplete = task.PercentBeforeComplete ?? request.PercentComplete;
+                task.PercentBeforeComplete = null;
+                task.IsComplete = false;
+            }
+            else
+            {
+                task.IsComplete = request.IsComplete;
+                task.PercentComplete = request.IsComplete ? 100 : request.PercentComplete;
+            }
+
             task.ModifiedUtc = DateTime.UtcNow;
 
             await db.SaveChangesAsync();

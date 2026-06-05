@@ -22,6 +22,9 @@ public class TaskItem : AuditableEntity
     /// <summary>Completion percentage, 0–100.</summary>
     public int PercentComplete { get; set; }
 
+    /// <summary>The percent held just before the task was marked complete, so unchecking can revert.</summary>
+    public int? PercentBeforeComplete { get; set; }
+
     public User User { get; set; } = null!;
     public Organization? Organization { get; set; }
     public ICollection<TimeEntry> TimeEntries { get; set; } = new List<TimeEntry>();
