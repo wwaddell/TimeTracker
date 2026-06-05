@@ -24,7 +24,8 @@ public static class TaskEndpoints
             var tasks = await db.Tasks
                 .Where(t => t.UserId == userId && t.OrganizationId == orgId)
                 .OrderBy(t => t.IsComplete).ThenByDescending(t => t.Id)
-                .Select(t => new TaskDto(t.Id, t.Title, t.Description, t.IsComplete, t.CreatedUtc))
+                .Select(t => new TaskDto(t.Id, t.Title, t.Description, t.IsComplete,
+                    t.EstimatedHours, t.PercentComplete, t.CreatedUtc))
                 .ToListAsync();
 
             return Results.Ok(tasks);
@@ -40,12 +41,9 @@ public static class TaskEndpoints
                 return Results.Forbid();
             }
 
-            if (string.IsNullOrWhiteSpace(request.Title))
+            if (Validate(request) is { } problem)
             {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["title"] = ["A title is required."],
-                });
+                return problem;
             }
 
             var task = new TaskItem
@@ -55,6 +53,8 @@ public static class TaskEndpoints
                 Title = request.Title.Trim(),
                 Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
                 IsComplete = request.IsComplete,
+                EstimatedHours = request.EstimatedHours,
+                PercentComplete = request.PercentComplete,
                 CreatedUtc = DateTime.UtcNow,
             };
             db.Tasks.Add(task);
@@ -75,17 +75,16 @@ public static class TaskEndpoints
                 return Results.NotFound();
             }
 
-            if (string.IsNullOrWhiteSpace(request.Title))
+            if (Validate(request) is { } problem)
             {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["title"] = ["A title is required."],
-                });
+                return problem;
             }
 
             task.Title = request.Title.Trim();
             task.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
             task.IsComplete = request.IsComplete;
+            task.EstimatedHours = request.EstimatedHours;
+            task.PercentComplete = request.PercentComplete;
             task.ModifiedUtc = DateTime.UtcNow;
 
             await db.SaveChangesAsync();
@@ -108,6 +107,24 @@ public static class TaskEndpoints
             await db.SaveChangesAsync();
             return Results.NoContent();
         });
+    }
+
+    private static IResult? Validate(SaveTaskRequest req)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (string.IsNullOrWhiteSpace(req.Title))
+        {
+            errors["title"] = ["A title is required."];
+        }
+        if (req.PercentComplete is < 0 or > 100)
+        {
+            errors["percentComplete"] = ["Percent complete must be between 0 and 100."];
+        }
+        if (req.EstimatedHours is < 0)
+        {
+            errors["estimatedHours"] = ["Estimated hours cannot be negative."];
+        }
+        return errors.Count > 0 ? Results.ValidationProblem(errors) : null;
     }
 
     private static Task<bool> IsMemberAsync(TimeTrackerDbContext db, int userId, int orgId) =>

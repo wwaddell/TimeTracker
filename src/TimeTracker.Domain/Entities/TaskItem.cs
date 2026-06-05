@@ -16,6 +16,12 @@ public class TaskItem : AuditableEntity
     public string? Description { get; set; }
     public bool IsComplete { get; set; }
 
+    /// <summary>Optional estimate of effort in hours.</summary>
+    public decimal? EstimatedHours { get; set; }
+
+    /// <summary>Completion percentage, 0–100.</summary>
+    public int PercentComplete { get; set; }
+
     public User User { get; set; } = null!;
     public Organization? Organization { get; set; }
     public ICollection<TimeEntry> TimeEntries { get; set; } = new List<TimeEntry>();

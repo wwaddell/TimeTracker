@@ -1,10 +1,12 @@
 @page "/tasks"
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Contracts.Tasks
+@using TimeTracker.Web.Components
 @using TimeTracker.Web.Services
-@inject TimeTracker.Web.Services.TimeTrackerApi Api
-@inject IJSRuntime JS
+@inject TimeTrackerApi Api
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IJSRuntime JS
 
 <PageTitle>Tasks</PageTitle>
 
@@ -44,37 +46,9 @@ else
 
     <div class="d-flex justify-space-between align-center mb-3">
         <MudText Typo="Typo.h5">My tasks</MudText>
-        @if (!showEditor)
-        {
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="NewTask">Add task</MudButton>
-        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => OpenDialogAsync(null))">Add task</MudButton>
     </div>
-
-    @if (showEditor && editing is not null)
-    {
-        <MudCard Class="mb-4" Elevation="2">
-            <MudCardContent>
-                <MudText Typo="Typo.h6" Class="mb-2">@(editing.Id == 0 ? "New task" : "Edit task")</MudText>
-                <MudTextField T="string" Label="Title" @bind-Value="editing.Title" Required="true"
-                              Variant="Variant.Outlined" Class="mb-3" />
-                <MudTextField T="string" Label="Description" @bind-Value="editing.Description" Lines="2"
-                              AutoGrow="true" MaxLines="12" Variant="Variant.Outlined" Class="mb-3" />
-                <MudCheckBox T="bool" Label="Complete" @bind-Value="editing.IsComplete" />
-                @if (errorMessage is not null)
-                {
-                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@errorMessage</MudAlert>
-                }
-            </MudCardContent>
-            <MudCardActions>
-                <MudSpacer />
-                <MudButton OnClick="CancelEdit">Cancel</MudButton>
-                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
-                    @(saving ? "Saving…" : "Save task")
-                </MudButton>
-            </MudCardActions>
-        </MudCard>
-    }
 
     @if (tasks is null)
     {
@@ -90,6 +64,8 @@ else
             <HeaderContent>
                 <MudTh Style="width:1px">Done</MudTh>
                 <MudTh>Task</MudTh>
+                <MudTh Style="width:1px; white-space:nowrap">Est.</MudTh>
+                <MudTh Style="width:160px">Progress</MudTh>
                 <MudTh Style="width:1px"></MudTh>
             </HeaderContent>
             <RowTemplate>
@@ -107,10 +83,20 @@ else
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Description</MudText>
                     }
                 </MudTd>
+                <MudTd Style="white-space:nowrap">
+                    @(context.EstimatedHours is { } h ? $"{h:0.##} h" : "—")
+                </MudTd>
+                <MudTd>
+                    <div class="d-flex align-center" style="gap:.5rem">
+                        <MudProgressLinear Color="Color.Primary" Rounded="true" Value="@context.PercentComplete"
+                                           Style="height:8px; flex:1" />
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.PercentComplete%</MudText>
+                    </div>
+                </MudTd>
                 <MudTd Style="text-align:right; white-space:nowrap">
                     <MudTooltip Text="Edit">
                         <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                                       OnClick="@(() => EditTask(context))" />
+                                       OnClick="@(() => OpenDialogAsync(context))" />
                     </MudTooltip>
                     <MudTooltip Text="Delete">
                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
@@ -126,11 +112,6 @@ else
     private IReadOnlyList<OrganizationDto>? organizations;
     private IReadOnlyList<TaskDto>? tasks;
     private int selectedOrgId;
-
-    private TaskEditModel? editing;
-    private bool showEditor;
-    private bool saving;
-    private string? errorMessage;
     private string? loadError;
 
     protected override Task OnInitializedAsync() => ReloadAllAsync();
@@ -151,97 +132,24 @@ else
     private async Task OnOrgChanged(int orgId)
     {
         selectedOrgId = orgId;
-        CancelEdit();
         await GuardAsync(LoadAsync);
     }
 
     private async Task LoadAsync() => tasks = await Api.GetTasksAsync(selectedOrgId);
 
-    private async Task GuardAsync(Func<Task> action)
+    private async Task OpenDialogAsync(TaskDto? task)
     {
-        try
+        var parameters = new DialogParameters<TaskDialog>
         {
-            loadError = null;
-            await action();
-        }
-        catch (ApiException ex)
-        {
-            loadError = ex.Message;
-        }
-        catch (Exception)
-        {
-            loadError = "Something went wrong loading your tasks. Please retry.";
-        }
-    }
-
-    private void NewTask()
-    {
-        editing = new TaskEditModel();
-        errorMessage = null;
-        showEditor = true;
-    }
-
-    private void EditTask(TaskDto task)
-    {
-        editing = new TaskEditModel
-        {
-            Id = task.Id,
-            Title = task.Title,
-            Description = task.Description,
-            IsComplete = task.IsComplete,
+            { x => x.OrgId, selectedOrgId },
+            { x => x.Existing, task },
         };
-        errorMessage = null;
-        showEditor = true;
-    }
-
-    private void CancelEdit()
-    {
-        showEditor = false;
-        editing = null;
-        errorMessage = null;
-    }
-
-    private async Task SaveAsync()
-    {
-        if (editing is null)
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<TaskDialog>(task is null ? "New task" : "Edit task", parameters, options);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
         {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(editing.Title))
-        {
-            errorMessage = "A title is required.";
-            return;
-        }
-
-        saving = true;
-        try
-        {
-            var request = new SaveTaskRequest
-            {
-                Title = editing.Title,
-                Description = editing.Description,
-                IsComplete = editing.IsComplete,
-            };
-
-            var result = editing.Id == 0
-                ? await Api.CreateTaskAsync(selectedOrgId, request)
-                : await Api.UpdateTaskAsync(selectedOrgId, editing.Id, request);
-
-            if (result.Success)
-            {
-                Snackbar.Add(editing.Id == 0 ? "Task added" : "Task updated", Severity.Success);
-                CancelEdit();
-                await LoadAsync();
-            }
-            else
-            {
-                errorMessage = result.Error;
-            }
-        }
-        finally
-        {
-            saving = false;
+            await LoadAsync();
         }
     }
 
@@ -252,6 +160,8 @@ else
             Title = task.Title,
             Description = task.Description,
             IsComplete = !task.IsComplete,
+            EstimatedHours = task.EstimatedHours,
+            PercentComplete = task.PercentComplete,
         };
         await Api.UpdateTaskAsync(selectedOrgId, task.Id, request);
         await LoadAsync();
@@ -269,11 +179,20 @@ else
         await LoadAsync();
     }
 
-    private sealed class TaskEditModel
+    private async Task GuardAsync(Func<Task> action)
     {
-        public int Id { get; set; }
-        public string Title { get; set; } = string.Empty;
-        public string? Description { get; set; }
-        public bool IsComplete { get; set; }
+        try
+        {
+            loadError = null;
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex.Message;
+        }
+        catch (Exception)
+        {
+            loadError = "Something went wrong loading your tasks. Please retry.";
+        }
     }
 }

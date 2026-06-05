@@ -12,6 +12,8 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Title).IsRequired().HasMaxLength(300);
         builder.Property(x => x.Description).HasMaxLength(2000);
+        builder.Property(x => x.EstimatedHours).HasColumnType("decimal(7,2)");
+        builder.Property(x => x.PercentComplete).HasDefaultValue(0);
 
         builder.HasOne(x => x.User)
             .WithMany()

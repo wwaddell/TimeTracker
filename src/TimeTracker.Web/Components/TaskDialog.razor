@@ -1,0 +1,95 @@
+@using TimeTracker.Contracts.Tasks
+@inject TimeTracker.Web.Services.TimeTrackerApi Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string" Label="Title" @bind-Value="title" Required="true"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField T="string" Label="Description" @bind-Value="description" Lines="2"
+                      AutoGrow="true" MaxLines="10" Variant="Variant.Outlined" Class="mb-3" />
+        <MudNumericField T="decimal?" Label="Estimated hours" @bind-Value="estimatedHours"
+                         Min="0" Step="0.25M" Variant="Variant.Outlined" Class="mb-3" />
+        <MudText Typo="Typo.body2">% complete: <b>@percentComplete%</b></MudText>
+        <MudSlider T="int" @bind-Value="percentComplete" Min="0" Max="100" Step="5" Color="Color.Primary" />
+        <MudCheckBox T="bool" Label="Complete" @bind-Value="isComplete" Class="mt-2" />
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
+            @(saving ? "Saving…" : "Save task")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public int OrgId { get; set; }
+    [Parameter] public TaskDto? Existing { get; set; }
+
+    private string title = string.Empty;
+    private string? description;
+    private bool isComplete;
+    private decimal? estimatedHours;
+    private int percentComplete;
+    private bool saving;
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is { } t)
+        {
+            title = t.Title;
+            description = t.Description;
+            isComplete = t.IsComplete;
+            estimatedHours = t.EstimatedHours;
+            percentComplete = t.PercentComplete;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            error = "A title is required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var request = new SaveTaskRequest
+            {
+                Title = title,
+                Description = description,
+                IsComplete = isComplete,
+                EstimatedHours = estimatedHours,
+                PercentComplete = percentComplete,
+            };
+            var result = Existing is null
+                ? await Api.CreateTaskAsync(OrgId, request)
+                : await Api.UpdateTaskAsync(OrgId, Existing.Id, request);
+
+            if (result.Success)
+            {
+                Snackbar.Add(Existing is null ? "Task added" : "Task updated", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                error = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
