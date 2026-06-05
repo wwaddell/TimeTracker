@@ -27,5 +27,11 @@ public class User : AuditableEntity
     /// </summary>
     public bool HideOrgSwitcher { get; set; }
 
+    /// <summary>Dark-mode preference. False = light, true = dark.</summary>
+    public bool DarkMode { get; set; }
+
+    /// <summary>When true, the Log Time page is shown in a denser, hint-free layout.</summary>
+    public bool CompactMode { get; set; }
+
     public ICollection<UserOrganization> Organizations { get; set; } = new List<UserOrganization>();
 }

@@ -28,7 +28,7 @@ public static class MeEndpoints
                 .Select(m => (int?)m.OrganizationId)
                 .FirstOrDefaultAsync();
             return Results.Ok(new MeDto(user.Id, user.DisplayName, user.Email,
-                isGlobalAdmin, user.HideOrgSwitcher, defaultOrgId));
+                isGlobalAdmin, user.HideOrgSwitcher, user.DarkMode, user.CompactMode, defaultOrgId));
         });
 
         // Update the user's personal preferences (default org + show/hide org switcher).
@@ -63,9 +63,16 @@ public static class MeEndpoints
                 }
             }
 
+            // Partial update: only apply fields the caller sent (non-null).
             var user = await db.Users.FirstAsync(u => u.Id == userId);
-            user.HideOrgSwitcher = request.HideOrgSwitcher;
-            user.ModifiedUtc = DateTime.UtcNow;
+            var changed = false;
+            if (request.HideOrgSwitcher is { } h && user.HideOrgSwitcher != h) { user.HideOrgSwitcher = h; changed = true; }
+            if (request.DarkMode is { } d && user.DarkMode != d) { user.DarkMode = d; changed = true; }
+            if (request.CompactMode is { } c && user.CompactMode != c) { user.CompactMode = c; changed = true; }
+            if (changed)
+            {
+                user.ModifiedUtc = DateTime.UtcNow;
+            }
 
             await db.SaveChangesAsync();
             return Results.NoContent();

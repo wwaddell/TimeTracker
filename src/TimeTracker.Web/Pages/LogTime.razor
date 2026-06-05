@@ -69,13 +69,19 @@ else
                                Variant="Variant.Filled" OnClick="OpenAdd" />
             </MudTooltip>
         </MudStack>
-        <MudText Typo="Typo.caption" Class="mt-2 mud-text-secondary d-flex align-center" Style="gap:.25rem">
-            Enter or <MudIcon Icon="@Icons.Material.Filled.Bolt" Size="Size.Small" />, or
-            <MudIcon Icon="@Icons.Material.Filled.PostAdd" Size="Size.Small" /> for detail
-        </MudText>
+        @if (me?.CompactMode != true)
+        {
+            <MudText Typo="Typo.caption" Class="mt-2 mud-text-secondary d-flex align-center" Style="gap:.25rem">
+                Enter or <MudIcon Icon="@Icons.Material.Filled.Bolt" Size="Size.Small" />, or
+                <MudIcon Icon="@Icons.Material.Filled.PostAdd" Size="Size.Small" /> for detail
+            </MudText>
+        }
     </MudPaper>
 
-    <MudText Typo="Typo.h5" Class="mb-3">Recent entries</MudText>
+    @if (me?.CompactMode != true)
+    {
+        <MudText Typo="Typo.h5" Class="mb-3">Recent entries</MudText>
+    }
 
     @if (entries is null)
     {

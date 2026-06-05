@@ -1,7 +1,10 @@
 @inherits LayoutComponentBase
+@using TimeTracker.Contracts.Me
+@using TimeTracker.Web.Services
 @using TimeTracker.Web.Theme
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject TimeTrackerApi Api
 
 <MudThemeProvider @ref="_themeProvider" @bind-IsDarkMode="_isDarkMode" Theme="AppTheme.Instance" />
 <MudPopoverProvider />
@@ -58,12 +61,11 @@
 </MudLayout>
 
 @code {
-    private const string DarkModeKey = "tt-dark-mode";
-
     private MudThemeProvider _themeProvider = default!;
     private ErrorBoundary _errorBoundary = default!;
     private bool _drawerOpen = true;
     private bool _isDarkMode;
+    private bool _prefsLoaded;
 
     // Clear the boundary on navigation so a previous page's error doesn't stick.
     protected override void OnParametersSet() => _errorBoundary?.Recover();
@@ -75,18 +77,24 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (!firstRender || _prefsLoaded)
         {
-            // Restore the saved preference, falling back to the OS setting.
-            var stored = await JS.InvokeAsync<string?>("localStorage.getItem", DarkModeKey);
-            _isDarkMode = stored switch
-            {
-                "true" => true,
-                "false" => false,
-                _ => await _themeProvider.GetSystemDarkModeAsync(),
-            };
-            StateHasChanged();
+            return;
         }
+        _prefsLoaded = true;
+
+        // Load dark-mode preference from the server (follows the user across devices);
+        // fall back to the OS setting when there's no API/auth yet.
+        try
+        {
+            var me = await Api.GetMeAsync();
+            _isDarkMode = me?.DarkMode ?? await _themeProvider.GetSystemDarkModeAsync();
+        }
+        catch
+        {
+            _isDarkMode = await _themeProvider.GetSystemDarkModeAsync();
+        }
+        StateHasChanged();
     }
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
@@ -94,6 +102,12 @@
     private async Task ToggleDarkMode()
     {
         _isDarkMode = !_isDarkMode;
-        await JS.InvokeVoidAsync("localStorage.setItem", DarkModeKey, _isDarkMode ? "true" : "false");
+        // Persist server-side so the choice follows the user. Failure is silent — the local
+        // toggle still applies for this session.
+        try
+        {
+            await Api.SaveMePreferencesAsync(new SaveMePreferencesRequest { DarkMode = _isDarkMode });
+        }
+        catch { /* best-effort */ }
     }
 }

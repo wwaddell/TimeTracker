@@ -75,7 +75,7 @@
             <MudItem xs="12" sm="6" Class="d-flex align-center">
                 <div>
                     <MudSwitch T="bool" @bind-Value="hideOrgSwitcher" Color="Color.Primary"
-                               Label="Hide the org switcher on Log Time / Tasks"
+                               Label="Hide the org switcher on Log Time / Tasks / Import"
                                Disabled="@(organizations.Count <= 1)" />
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">
                         @if (organizations.Count <= 1)
@@ -88,6 +88,18 @@
                         }
                     </MudText>
                 </div>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSwitch T="bool" @bind-Value="darkMode" Color="Color.Primary" Label="Dark mode" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Persisted on your account so it follows you across devices.
+                </MudText>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSwitch T="bool" @bind-Value="compactMode" Color="Color.Primary" Label="Compact Log Time" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Drops the keyboard hint under Quick add and the "Recent entries" heading.
+                </MudText>
             </MudItem>
         </MudGrid>
         <div class="d-flex justify-end mt-3">
@@ -195,10 +207,15 @@
     // Editable preferences (seeded from `me` on load).
     private int defaultOrgId;
     private bool hideOrgSwitcher;
+    private bool darkMode;
+    private bool compactMode;
     private bool saving;
 
-    private bool PreferencesDirty =>
-        me is not null && (defaultOrgId != (me.DefaultOrganizationId ?? 0) || hideOrgSwitcher != me.HideOrgSwitcher);
+    private bool PreferencesDirty => me is not null && (
+        defaultOrgId != (me.DefaultOrganizationId ?? 0)
+        || hideOrgSwitcher != me.HideOrgSwitcher
+        || darkMode != me.DarkMode
+        || compactMode != me.CompactMode);
 
     protected override async Task OnInitializedAsync()
     {
@@ -216,6 +233,8 @@
             if (me is not null)
             {
                 hideOrgSwitcher = me.HideOrgSwitcher;
+                darkMode = me.DarkMode;
+                compactMode = me.CompactMode;
                 // Default-org dropdown: prefer the saved default; otherwise the first available org.
                 defaultOrgId = me.DefaultOrganizationId
                     ?? organizations.FirstOrDefault()?.Id
@@ -289,10 +308,12 @@
             {
                 DefaultOrganizationId = defaultOrgId == 0 ? null : defaultOrgId,
                 HideOrgSwitcher = hideOrgSwitcher,
+                DarkMode = darkMode,
+                CompactMode = compactMode,
             });
             if (result.Success)
             {
-                Snackbar.Add("Preferences saved", Severity.Success);
+                Snackbar.Add("Preferences saved — refresh the page to see UI changes apply.", Severity.Success);
                 me = await Api.GetMeAsync(); // refresh so PreferencesDirty resets
             }
             else

@@ -1,5 +1,6 @@
 @page "/import"
 @using TimeTracker.Contracts.Calendar
+@using TimeTracker.Contracts.Me
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Web.Services
 @inject TimeTrackerApi Api
@@ -69,15 +70,19 @@ else
 
     <MudPaper Class="pa-4 mb-4" Outlined="true">
         <MudGrid>
-            <MudItem xs="12" sm="4">
-                <MudSelect T="int" Label="Organization" Value="selectedOrgId" ValueChanged="OnOrgChanged"
-                           Variant="Variant.Outlined" Dense="true">
-                    @foreach (var org in organizations)
-                    {
-                        <MudSelectItem T="int" Value="@org.Id">@org.Name</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
+            @* Hide the org switcher when the user only belongs to one org, or has opted to hide it. *@
+            @if (organizations.Count > 1 && me?.HideOrgSwitcher != true)
+            {
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="int" Label="Organization" Value="selectedOrgId" ValueChanged="OnOrgChanged"
+                               Variant="Variant.Outlined" Dense="true">
+                        @foreach (var org in organizations)
+                        {
+                            <MudSelectItem T="int" Value="@org.Id">@org.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            }
             <MudItem xs="6" sm="3">
                 <MudDatePicker Label="From" @bind-Date="fromDate" Variant="Variant.Outlined" />
             </MudItem>
@@ -220,6 +225,7 @@ else
 
 @code {
     private IReadOnlyList<OrganizationDto>? organizations;
+    private MeDto? me;
     private EntryFieldDto? projectField;
     private int selectedOrgId;
     private string? loadError;
@@ -273,6 +279,7 @@ else
     private Task ReloadAllAsync() => GuardAsync(async () =>
     {
         organizations = await Api.GetOrganizationsAsync();
+        me ??= await Api.GetMeAsync(); // for HideOrgSwitcher preference
         if (organizations.Count > 0)
         {
             if (selectedOrgId == 0)
