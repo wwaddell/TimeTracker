@@ -25,7 +25,7 @@ public static class TaskEndpoints
                 .Where(t => t.UserId == userId && t.OrganizationId == orgId)
                 .OrderBy(t => t.IsComplete).ThenByDescending(t => t.Id)
                 .Select(t => new TaskDto(t.Id, t.Title, t.Description, t.IsComplete,
-                    t.EstimatedHours, t.PercentComplete, t.CreatedUtc))
+                    t.EstimatedHours, t.PercentComplete, t.PercentBeforeComplete, t.CreatedUtc))
                 .ToListAsync();
 
             return Results.Ok(tasks);
@@ -55,7 +55,7 @@ public static class TaskEndpoints
                 IsComplete = request.IsComplete,
                 EstimatedHours = request.EstimatedHours,
                 PercentComplete = request.IsComplete ? 100 : request.PercentComplete,
-                PercentBeforeComplete = request.IsComplete ? request.PercentComplete : null,
+                PercentBeforeComplete = request.IsComplete ? request.PercentBeforeComplete : null,
                 CreatedUtc = DateTime.UtcNow,
             };
             db.Tasks.Add(task);
@@ -81,31 +81,14 @@ public static class TaskEndpoints
                 return problem;
             }
 
-            var wasComplete = task.IsComplete;
+            // Authoritative save: persist exactly what the caller sends, normalizing so a
+            // complete task is always 100% (and the prior % is only retained while complete).
             task.Title = request.Title.Trim();
             task.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
             task.EstimatedHours = request.EstimatedHours;
-
-            if (!wasComplete && request.IsComplete)
-            {
-                // Completing: remember where it was, snap to 100%.
-                task.PercentBeforeComplete = task.PercentComplete;
-                task.PercentComplete = 100;
-                task.IsComplete = true;
-            }
-            else if (wasComplete && !request.IsComplete)
-            {
-                // Reopening: revert to the percent it had before being completed.
-                task.PercentComplete = task.PercentBeforeComplete ?? request.PercentComplete;
-                task.PercentBeforeComplete = null;
-                task.IsComplete = false;
-            }
-            else
-            {
-                task.IsComplete = request.IsComplete;
-                task.PercentComplete = request.IsComplete ? 100 : request.PercentComplete;
-            }
-
+            task.IsComplete = request.IsComplete;
+            task.PercentComplete = request.IsComplete ? 100 : request.PercentComplete;
+            task.PercentBeforeComplete = request.IsComplete ? request.PercentBeforeComplete : null;
             task.ModifiedUtc = DateTime.UtcNow;
 
             await db.SaveChangesAsync();

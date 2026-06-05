@@ -155,13 +155,16 @@ else
 
     private async Task ToggleCompleteAsync(TaskDto task)
     {
+        var completing = !task.IsComplete;
         var request = new SaveTaskRequest
         {
             Title = task.Title,
             Description = task.Description,
-            IsComplete = !task.IsComplete,
             EstimatedHours = task.EstimatedHours,
-            PercentComplete = task.PercentComplete,
+            IsComplete = completing,
+            // Completing snaps to 100% (remember current); reopening reverts to the prior %.
+            PercentComplete = completing ? 100 : (task.PercentBeforeComplete ?? task.PercentComplete),
+            PercentBeforeComplete = completing ? task.PercentComplete : null,
         };
         await Api.UpdateTaskAsync(selectedOrgId, task.Id, request);
         await LoadAsync();
