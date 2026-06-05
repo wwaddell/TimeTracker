@@ -24,6 +24,7 @@ public class RightLookupConfiguration : IEntityTypeConfiguration<RightLookup>
             new RightLookup { Id = OrgRight.ManageUsers, Code = "manage_users", Name = "Manage users", Description = "Invite members and assign their roles." },
             new RightLookup { Id = OrgRight.ManageRoles, Code = "manage_roles", Name = "Manage roles", Description = "Create and edit roles and their rights." },
             new RightLookup { Id = OrgRight.ManageFields, Code = "manage_fields", Name = "Manage fields", Description = "Configure the time-entry fields." },
-            new RightLookup { Id = OrgRight.ViewReports, Code = "view_reports", Name = "View reports", Description = "View time reports and summaries." });
+            new RightLookup { Id = OrgRight.ViewReports, Code = "view_reports", Name = "View reports", Description = "View time reports and summaries." },
+            new RightLookup { Id = OrgRight.ManageProjects, Code = "manage_projects", Name = "Manage projects", Description = "Create and edit organization projects." });
     }
 }

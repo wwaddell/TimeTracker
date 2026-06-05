@@ -8,6 +8,17 @@
                       Variant="Variant.Outlined" Class="mb-3" />
         <MudTextField T="string" Label="Description" @bind-Value="description" Lines="2"
                       AutoGrow="true" MaxLines="8" Variant="Variant.Outlined" Class="mb-3" />
+        <MudGrid Class="mb-3">
+            <MudItem xs="12" sm="5">
+                <MudTextField T="string" Label="Reference code" @bind-Value="referenceCode"
+                              Variant="Variant.Outlined" Placeholder="e.g. ACME-001" HelperText="Used to auto-map calendar imports." />
+            </MudItem>
+            <MudItem xs="12" sm="7">
+                <MudTextField T="string" Label="External URL" @bind-Value="externalUrl"
+                              Variant="Variant.Outlined" InputType="InputType.Url" Placeholder="https://…"
+                              HelperText="Link to this project in another system (Jira, Asana, etc.)." />
+            </MudItem>
+        </MudGrid>
         <div class="d-flex flex-wrap" style="gap:2rem">
             <MudSwitch T="bool" @bind-Value="isActive" Color="Color.Primary" Label="Active" />
             <MudSwitch T="bool" @bind-Value="isRestricted" Color="Color.Primary"
@@ -43,6 +54,8 @@
 
     private string name = string.Empty;
     private string? description;
+    private string? referenceCode;
+    private string? externalUrl;
     private bool isActive = true;
     private bool isRestricted;
     private bool saving;
@@ -56,6 +69,8 @@
             description = p.Description;
             isActive = p.IsActive;
             isRestricted = p.IsRestricted;
+            referenceCode = p.ReferenceCode;
+            externalUrl = p.ExternalUrl;
         }
     }
 
@@ -77,6 +92,8 @@
                 Description = description,
                 IsActive = isActive,
                 IsRestricted = isRestricted,
+                ReferenceCode = referenceCode,
+                ExternalUrl = externalUrl,
             };
             var result = Existing is null
                 ? await Api.CreateProjectAsync(OrgId, request)

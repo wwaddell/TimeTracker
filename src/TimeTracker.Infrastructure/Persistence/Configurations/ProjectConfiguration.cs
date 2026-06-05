@@ -12,6 +12,14 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Description).HasMaxLength(2000);
+        builder.Property(x => x.ReferenceCode).HasMaxLength(40);
+        builder.Property(x => x.ExternalUrl).HasMaxLength(500);
+
+        // Reference codes are unique within an org (and case-sensitive at the DB level — we
+        // compare case-insensitively at the app layer). Filtered to non-deleted rows with a code.
+        builder.HasIndex(x => new { x.OrganizationId, x.ReferenceCode })
+            .IsUnique()
+            .HasFilter("[deleted_utc] IS NULL AND [reference_code] IS NOT NULL");
 
         // Restrict (not cascade) so the TaskItem/TimeEntry → Project SetNull paths don't
         // collide with their existing Organization paths (SQL Server forbids multiple cascade

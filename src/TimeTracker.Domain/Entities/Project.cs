@@ -15,6 +15,15 @@ public class Project : AuditableEntity, ISoftDeletable
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
 
+    /// <summary>
+    /// Optional short code (e.g. "ACME-001") used to auto-map calendar imports — if the meeting
+    /// subject contains this code, the entry's <c>ProjectId</c> is suggested automatically.
+    /// </summary>
+    public string? ReferenceCode { get; set; }
+
+    /// <summary>Optional external system URL (e.g. Jira project link) shown on the projects list.</summary>
+    public string? ExternalUrl { get; set; }
+
     /// <summary>Inactive projects are hidden from new entries but kept for history.</summary>
     public bool IsActive { get; set; } = true;
 

@@ -42,6 +42,11 @@ public record CalendarMeetingDto
     /// <summary>Task remembered for this meeting's series, if previously tagged.</summary>
     public int? SuggestedTaskId { get; init; }
 
+    /// <summary>
+    /// Project suggested by the server (auto-mapped from the subject via a project's ReferenceCode).
+    /// </summary>
+    public int? SuggestedProjectId { get; init; }
+
     /// <summary>Field values remembered for this meeting's series, if previously tagged.</summary>
     public IReadOnlyList<CalendarAttributeValue> SuggestedAttributes { get; init; } = [];
 }
@@ -68,6 +73,10 @@ public record ImportMeetingRequest
     public bool IsRecurring { get; init; }
 
     public int? TaskId { get; init; }
+
+    /// <summary>The chosen project (either the server suggestion or the user's pick).</summary>
+    public int? ProjectId { get; init; }
+
     public Dictionary<int, string?> Attributes { get; init; } = new();
 }
 

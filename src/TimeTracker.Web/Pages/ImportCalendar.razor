@@ -1,6 +1,7 @@
 @page "/import"
 @using TimeTracker.Contracts.Calendar
 @using TimeTracker.Contracts.Me
+@using TimeTracker.Contracts.Projects
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Web.Services
 @inject TimeTrackerApi Api
@@ -193,25 +194,18 @@ else
                         </MudText>
                     </MudTd>
                     <MudTd>
-                        @if (projectField is not null && !context.Meeting.AlreadyImported)
+                        @if (projects is { Count: > 0 } && !context.Meeting.AlreadyImported)
                         {
-                            @if (projectField.Options.Count > 0)
-                            {
-                                <MudSelect T="string" Value="context.ProjectValue" Clearable="true" Dense="true" Margin="Margin.Dense"
-                                           Variant="Variant.Outlined" Placeholder="@($"No {projectField.Label.ToLowerInvariant()}")"
-                                           ValueChanged="@(v => OnProjectChanged(context, v))">
-                                    @foreach (var opt in projectField.Options)
-                                    {
-                                        <MudSelectItem T="string" Value="@opt.Value">@opt.Label</MudSelectItem>
-                                    }
-                                </MudSelect>
-                            }
-                            else
-                            {
-                                <MudTextField T="string" Value="context.ProjectValue" Dense="true" Margin="Margin.Dense"
-                                              Variant="Variant.Outlined" Placeholder="@projectField.Label" DebounceInterval="400"
-                                              ValueChanged="@(v => OnProjectChanged(context, v))" />
-                            }
+                            <MudSelect T="int?" Value="context.ProjectId" Clearable="true" Dense="true" Margin="Margin.Dense"
+                                       Variant="Variant.Outlined" Placeholder="No project"
+                                       ValueChanged="@(v => OnProjectChanged(context, v))">
+                                @foreach (var p in projects)
+                                {
+                                    <MudSelectItem T="int?" Value="@((int?)p.Id)">
+                                        @p.Name@(string.IsNullOrWhiteSpace(p.ReferenceCode) ? "" : $" · {p.ReferenceCode}")
+                                    </MudSelectItem>
+                                }
+                            </MudSelect>
                         }
                     </MudTd>
                 </RowTemplate>
@@ -226,7 +220,7 @@ else
 @code {
     private IReadOnlyList<OrganizationDto>? organizations;
     private MeDto? me;
-    private EntryFieldDto? projectField;
+    private IReadOnlyList<ProjectPickerDto>? projects;
     private int selectedOrgId;
     private string? loadError;
 
@@ -286,16 +280,10 @@ else
             {
                 selectedOrgId = organizations[0].Id;
             }
-            projectField = FindProjectField(await Api.GetEntryFieldsAsync(selectedOrgId));
+            projects = await Api.GetVisibleProjectsAsync(selectedOrgId);
             connection = await Api.GetCalendarConnectionAsync(selectedOrgId);
         }
     });
-
-    // The configurable "Project" field for this org (a Select shows a dropdown; otherwise free text).
-    private static EntryFieldDto? FindProjectField(IReadOnlyList<EntryFieldDto> fields) =>
-        fields.FirstOrDefault(f =>
-            string.Equals(f.FieldKey, "project", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(f.Label, "project", StringComparison.OrdinalIgnoreCase));
 
     private async Task OnOrgChanged(int orgId)
     {
@@ -304,7 +292,7 @@ else
         usingSampleData = false;
         await GuardAsync(async () =>
         {
-            projectField = FindProjectField(await Api.GetEntryFieldsAsync(selectedOrgId));
+            projects = await Api.GetVisibleProjectsAsync(selectedOrgId);
             connection = await Api.GetCalendarConnectionAsync(selectedOrgId);
         });
     }
@@ -333,9 +321,8 @@ else
             {
                 Meeting = m,
                 Selected = m.Recommended,
-                ProjectValue = projectField is null
-                    ? null
-                    : m.SuggestedAttributes.FirstOrDefault(a => a.FieldId == projectField.Id)?.Value,
+                // Auto-map: prefer the server-side reference-code match (SuggestedProjectId).
+                ProjectId = m.SuggestedProjectId,
             }).ToList();
         }
         catch (ApiException ex)
@@ -372,8 +359,9 @@ else
                     StartTime = r.Meeting.StartTime,
                     DurationMinutes = r.Meeting.DurationMinutes,
                     IsRecurring = r.Meeting.IsRecurring,
-                    // Carry remembered field values, with the chosen Project applied on top.
-                    Attributes = BuildAttributes(r),
+                    ProjectId = r.ProjectId,
+                    // Carry any remembered field values (legacy series-tag attributes).
+                    Attributes = r.Meeting.SuggestedAttributes.ToDictionary(a => a.FieldId, a => a.Value),
                 }).ToList(),
             };
 
@@ -396,25 +384,7 @@ else
         }
     }
 
-    // Merge the meeting's remembered field values with the chosen Project (project wins).
-    private Dictionary<int, string?> BuildAttributes(Row r)
-    {
-        var attrs = r.Meeting.SuggestedAttributes.ToDictionary(a => a.FieldId, a => a.Value);
-        if (projectField is not null)
-        {
-            if (!string.IsNullOrWhiteSpace(r.ProjectValue))
-            {
-                attrs[projectField.Id] = r.ProjectValue;
-            }
-            else
-            {
-                attrs.Remove(projectField.Id);
-            }
-        }
-        return attrs;
-    }
-
-    private void OnProjectChanged(Row row, string? value) => row.ProjectValue = value;
+    private void OnProjectChanged(Row row, int? value) => row.ProjectId = value;
 
     private async Task GuardAsync(Func<Task> action)
     {
@@ -437,6 +407,6 @@ else
     {
         public CalendarMeetingDto Meeting { get; init; } = default!;
         public bool Selected { get; set; }
-        public string? ProjectValue { get; set; }
+        public int? ProjectId { get; set; }
     }
 }

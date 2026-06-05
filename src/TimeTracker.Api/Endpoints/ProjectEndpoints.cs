@@ -29,18 +29,18 @@ public static class ProjectEndpoints
                 .Where(p => p.OrganizationId == orgId && p.IsActive
                     && (!p.IsRestricted || p.Members.Any(m => m.UserId == userId)))
                 .OrderBy(p => p.Name)
-                .Select(p => new ProjectPickerDto(p.Id, p.Name))
+                .Select(p => new ProjectPickerDto(p.Id, p.Name, p.ReferenceCode))
                 .ToListAsync();
 
             return Results.Ok(projects);
         });
 
-        // ---- Admin (ManageOrganization) ----
+        // ---- Admin (ManageProjects) ----
 
         api.MapGet("/api/organizations/{orgId:int}/projects", async (
             int orgId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageOrganization))
+            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageProjects))
             {
                 return Results.Forbid();
             }
@@ -48,7 +48,8 @@ public static class ProjectEndpoints
             var projects = await db.Projects
                 .Where(p => p.OrganizationId == orgId)
                 .OrderBy(p => p.Name)
-                .Select(p => new ProjectDto(p.Id, p.Name, p.Description, p.IsActive, p.IsRestricted, p.Members.Count))
+                .Select(p => new ProjectDto(p.Id, p.Name, p.Description, p.IsActive, p.IsRestricted,
+                    p.ReferenceCode, p.ExternalUrl, p.Members.Count))
                 .ToListAsync();
 
             return Results.Ok(projects);
@@ -57,7 +58,7 @@ public static class ProjectEndpoints
         api.MapPost("/api/organizations/{orgId:int}/projects", async (
             int orgId, SaveProjectRequest req, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageOrganization))
+            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageProjects))
             {
                 return Results.Forbid();
             }
@@ -76,6 +77,16 @@ public static class ProjectEndpoints
                 });
             }
 
+            var refCode = string.IsNullOrWhiteSpace(req.ReferenceCode) ? null : req.ReferenceCode.Trim();
+            if (refCode is not null
+                && await db.Projects.AnyAsync(p => p.OrganizationId == orgId && p.ReferenceCode == refCode))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["referenceCode"] = ["Another project already uses this reference code."],
+                });
+            }
+
             var project = new Project
             {
                 OrganizationId = orgId,
@@ -83,6 +94,8 @@ public static class ProjectEndpoints
                 Description = string.IsNullOrWhiteSpace(req.Description) ? null : req.Description.Trim(),
                 IsActive = req.IsActive,
                 IsRestricted = req.IsRestricted,
+                ReferenceCode = refCode,
+                ExternalUrl = string.IsNullOrWhiteSpace(req.ExternalUrl) ? null : req.ExternalUrl.Trim(),
                 CreatedUtc = DateTime.UtcNow,
             };
             db.Projects.Add(project);
@@ -94,7 +107,7 @@ public static class ProjectEndpoints
         api.MapPut("/api/organizations/{orgId:int}/projects/{id:int}", async (
             int orgId, int id, SaveProjectRequest req, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageOrganization))
+            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageProjects))
             {
                 return Results.Forbid();
             }
@@ -120,10 +133,22 @@ public static class ProjectEndpoints
                 });
             }
 
+            var refCode = string.IsNullOrWhiteSpace(req.ReferenceCode) ? null : req.ReferenceCode.Trim();
+            if (refCode is not null && project.ReferenceCode != refCode && await db.Projects
+                    .AnyAsync(p => p.OrganizationId == orgId && p.ReferenceCode == refCode && p.Id != id))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["referenceCode"] = ["Another project already uses this reference code."],
+                });
+            }
+
             project.Name = name;
             project.Description = string.IsNullOrWhiteSpace(req.Description) ? null : req.Description.Trim();
             project.IsActive = req.IsActive;
             project.IsRestricted = req.IsRestricted;
+            project.ReferenceCode = refCode;
+            project.ExternalUrl = string.IsNullOrWhiteSpace(req.ExternalUrl) ? null : req.ExternalUrl.Trim();
             project.ModifiedUtc = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
@@ -135,7 +160,7 @@ public static class ProjectEndpoints
         api.MapDelete("/api/organizations/{orgId:int}/projects/{id:int}", async (
             int orgId, int id, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageOrganization))
+            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageProjects))
             {
                 return Results.Forbid();
             }
@@ -158,7 +183,7 @@ public static class ProjectEndpoints
         api.MapGet("/api/organizations/{orgId:int}/projects/{id:int}/members", async (
             int orgId, int id, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageOrganization))
+            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageProjects))
             {
                 return Results.Forbid();
             }
@@ -182,7 +207,7 @@ public static class ProjectEndpoints
         api.MapPost("/api/organizations/{orgId:int}/projects/{id:int}/members", async (
             int orgId, int id, AddProjectMemberRequest req, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageOrganization))
+            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageProjects))
             {
                 return Results.Forbid();
             }
@@ -229,7 +254,7 @@ public static class ProjectEndpoints
         api.MapDelete("/api/organizations/{orgId:int}/projects/{id:int}/members/{userId:int}", async (
             int orgId, int id, int userId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageOrganization))
+            if (!await currentUser.HasRightAsync(orgId, OrgRight.ManageProjects))
             {
                 return Results.Forbid();
             }

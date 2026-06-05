@@ -65,13 +65,35 @@ else
         <MudTable Items="projects" Hover="true" Dense="true" Elevation="1">
             <HeaderContent>
                 <MudTh>Name</MudTh>
+                <MudTh Style="width:1px; white-space:nowrap">Code</MudTh>
                 <MudTh>Description</MudTh>
                 <MudTh Style="width:1px; white-space:nowrap; text-align:center">Active</MudTh>
                 <MudTh Style="width:1px; white-space:nowrap; text-align:center">Visibility</MudTh>
                 <MudTh Style="width:1px"></MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd><b>@context.Name</b></MudTd>
+                <MudTd>
+                    <div class="d-flex align-center" style="gap:.4rem">
+                        <b>@context.Name</b>
+                        @if (!string.IsNullOrWhiteSpace(context.ExternalUrl))
+                        {
+                            <MudTooltip Text="@context.ExternalUrl">
+                                <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
+                                               Href="@context.ExternalUrl" Target="_blank" />
+                            </MudTooltip>
+                        }
+                    </div>
+                </MudTd>
+                <MudTd Style="white-space:nowrap">
+                    @if (!string.IsNullOrWhiteSpace(context.ReferenceCode))
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@context.ReferenceCode</MudChip>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">—</MudText>
+                    }
+                </MudTd>
                 <MudTd>
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Description</MudText>
                 </MudTd>

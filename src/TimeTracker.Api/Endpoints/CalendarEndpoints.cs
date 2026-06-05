@@ -101,12 +101,35 @@ public static class CalendarEndpoints
                 })
                 .ToDictionaryAsync(t => t.SeriesUid);
 
+            // Visible-to-user projects with a reference code — for auto-mapping by subject.
+            // Long codes first so e.g. "FOO-12" wins over a "FOO" prefix.
+            var refCodedProjects = await db.Projects
+                .Where(p => p.OrganizationId == orgId && p.IsActive && p.ReferenceCode != null
+                    && (!p.IsRestricted || p.Members.Any(m => m.UserId == userId)))
+                .Select(p => new { p.Id, p.ReferenceCode })
+                .ToListAsync();
+            var codeIndex = refCodedProjects
+                .OrderByDescending(p => p.ReferenceCode!.Length)
+                .ToList();
+
             var meetings = events.Select(e =>
             {
                 var local = e.StartUtc.ToLocalTime();
                 var occurrenceStartUtc = e.StartUtc.UtcDateTime;
                 var already = importedKeys.Contains(OccurrenceKey(e.SeriesUid, occurrenceStartUtc));
                 tags.TryGetValue(e.SeriesUid, out var tag);
+
+                // Auto-map: first project whose reference code appears in the subject (case-
+                // insensitive; longest codes win, so "FOO-12" beats "FOO" if both are configured).
+                int? suggestedProjectId = null;
+                foreach (var p in codeIndex)
+                {
+                    if (e.Subject.Contains(p.ReferenceCode!, StringComparison.OrdinalIgnoreCase))
+                    {
+                        suggestedProjectId = p.Id;
+                        break;
+                    }
+                }
 
                 return new CalendarMeetingDto
                 {
@@ -126,6 +149,7 @@ public static class CalendarEndpoints
                     Recommended = !already && !e.IsAllDay
                         && !string.Equals(e.ShowAs, "free", StringComparison.OrdinalIgnoreCase),
                     SuggestedTaskId = tag?.TaskId,
+                    SuggestedProjectId = suggestedProjectId,
                     SuggestedAttributes = tag?.Attributes ?? [],
                 };
             }).ToList();
@@ -201,6 +225,7 @@ public static class CalendarEndpoints
                     UserId = userId,
                     OrganizationId = orgId,
                     TaskId = m.TaskId,
+                    ProjectId = m.ProjectId,
                     EntryDate = m.EntryDate,
                     StartTime = org.RequireTime ? m.StartTime : null,
                     DurationMinutes = m.DurationMinutes,

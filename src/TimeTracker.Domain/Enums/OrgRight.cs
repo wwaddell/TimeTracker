@@ -12,4 +12,5 @@ public enum OrgRight
     ManageRoles = 3,
     ManageFields = 4,
     ViewReports = 5,
+    ManageProjects = 6,
 }
