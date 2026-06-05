@@ -92,8 +92,8 @@ else
                 var headerParts = new List<string>();
                 if (project is not null) { headerParts.Add(project.Value!); }
                 if (entry.TaskTitle is not null) { headerParts.Add(entry.TaskTitle); }
-                var noteIsHeader = headerParts.Count == 0;
-                var header = noteIsHeader ? entry.Note : string.Join(" · ", headerParts);
+                var hasHeader = headerParts.Count > 0;
+                var header = string.Join(" · ", headerParts);
                 var cat = CategoryFor(entry);
                 // Lead glyph: the category's icon if set, else a project/task/default icon — so
                 // every row has a consistent header.
@@ -119,7 +119,10 @@ else
                             {
                                 <MudIcon Icon="@leadIcon" Size="Size.Small" Color="Color.Primary" />
                             }
-                            <MudText Typo="Typo.subtitle1" Style="font-weight:600; word-break:break-word">@header</MudText>
+                            @if (hasHeader)
+                            {
+                                <MudText Typo="Typo.subtitle1" Style="font-weight:600; word-break:break-word">@header</MudText>
+                            }
                             @if (entry.Source == TimeEntrySource.OutlookGraph)
                             {
                                 <MudTooltip Text="Imported from Outlook">
@@ -157,7 +160,7 @@ else
                     </div>
 
                     @* Details below the header: the note, then the remaining field values. *@
-                    @if (!noteIsHeader && !string.IsNullOrWhiteSpace(entry.Note))
+                    @if (!string.IsNullOrWhiteSpace(entry.Note))
                     {
                         <MudText Typo="Typo.body2" Class="mt-1" Style="word-break:break-word">@entry.Note</MudText>
                     }
