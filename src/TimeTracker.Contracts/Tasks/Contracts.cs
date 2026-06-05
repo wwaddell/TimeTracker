@@ -13,6 +13,7 @@ public record TaskDto(
     int? PercentBeforeComplete,
     TaskPriority? Priority,
     DateOnly? DueDate,
+    string? Project,
     DateTime CreatedUtc);
 
 /// <summary>Create/update payload for a task.</summary>
@@ -32,4 +33,7 @@ public record SaveTaskRequest
 
     /// <summary>Optional due date.</summary>
     public DateOnly? DueDate { get; init; }
+
+    /// <summary>Optional project (value of the org's "Project" field) this task belongs to.</summary>
+    public string? Project { get; init; }
 }

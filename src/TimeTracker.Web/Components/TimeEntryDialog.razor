@@ -66,6 +66,16 @@
         else if (InitialTaskId is { } taskId)
         {
             model.TaskId = taskId;
+            // Mirror TimeEntryFields.OnTaskChanged: pre-link from "Log time from task"
+            // should also carry the task's project into the entry.
+            var task = Tasks?.FirstOrDefault(t => t.Id == taskId);
+            var projectField = Fields.FirstOrDefault(f =>
+                string.Equals(f.FieldKey, "project", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(f.Label, "project", StringComparison.OrdinalIgnoreCase));
+            if (task?.Project is { } p && !string.IsNullOrWhiteSpace(p) && projectField is not null)
+            {
+                model.Attributes[projectField.Id] = p;
+            }
         }
     }
 

@@ -18,6 +18,9 @@ public class TaskItem : AuditableEntity, ISoftDeletable
     public string? Description { get; set; }
     public bool IsComplete { get; set; }
 
+    /// <summary>Optional project (value of the org's configurable "Project" field) this task belongs to.</summary>
+    public string? Project { get; set; }
+
     /// <summary>Optional priority (null = none).</summary>
     public TaskPriority? Priority { get; set; }
 

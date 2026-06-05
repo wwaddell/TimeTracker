@@ -208,6 +208,7 @@ else
         {
             { x => x.OrgId, selectedOrgId },
             { x => x.Existing, task },
+            { x => x.Fields, fields ?? [] },
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
         var dialog = await DialogService.ShowAsync<TaskDialog>(task is null ? "New task" : "Edit task", parameters, options);

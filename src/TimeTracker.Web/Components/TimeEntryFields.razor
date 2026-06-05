@@ -168,7 +168,20 @@
         Model.TaskId = taskId;
         syncedTaskId = taskId;
         taskPercent = SelectedTask?.PercentComplete ?? 0;
+
+        // If the selected task has a project and the org has a Project field, auto-fill it
+        // (only when the entry's Project is empty — don't overwrite a user's choice).
+        if (SelectedTask?.Project is { } taskProject && !string.IsNullOrWhiteSpace(taskProject)
+            && ProjectField is { } projectField
+            && string.IsNullOrWhiteSpace(GetValue(projectField.Id)))
+        {
+            SetValue(projectField.Id, taskProject);
+        }
     }
+
+    private EntryFieldDto? ProjectField => Fields.FirstOrDefault(f =>
+        string.Equals(f.FieldKey, "project", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(f.Label, "project", StringComparison.OrdinalIgnoreCase));
 
     private void OnPercentChanged(int value) => taskPercent = value;
 
@@ -192,6 +205,10 @@
             IsComplete = complete,
             PercentComplete = taskPercent,
             PercentBeforeComplete = complete ? task.PercentComplete : null,
+            // Preserve the task's other fields — the API PUT is authoritative.
+            Priority = task.Priority,
+            DueDate = task.DueDate,
+            Project = task.Project,
         });
     }
 

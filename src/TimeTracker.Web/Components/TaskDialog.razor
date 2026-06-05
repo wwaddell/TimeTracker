@@ -1,4 +1,5 @@
 @using TimeTracker.Contracts.Tasks
+@using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Domain.Enums
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
 @inject ISnackbar Snackbar
@@ -9,6 +10,25 @@
                       Variant="Variant.Outlined" Class="mb-3" />
         <MudTextField T="string" Label="Description" @bind-Value="description" Lines="2"
                       AutoGrow="true" MaxLines="10" Variant="Variant.Outlined" Class="mb-3" />
+        @if (ProjectField is { } pf)
+        {
+            @if (pf.Options.Count > 0)
+            {
+                <MudSelect T="string" Label="@pf.Label" @bind-Value="project" Clearable="true"
+                           Variant="Variant.Outlined" Class="mb-3"
+                           Placeholder="@($"No {pf.Label.ToLowerInvariant()}")">
+                    @foreach (var opt in pf.Options)
+                    {
+                        <MudSelectItem T="string" Value="@opt.Value">@opt.Label</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            else
+            {
+                <MudTextField T="string" Label="@pf.Label" @bind-Value="project"
+                              Variant="Variant.Outlined" Class="mb-3" />
+            }
+        }
         <MudGrid Class="mb-3">
             <MudItem xs="12" sm="4">
                 <MudSelect T="TaskPriority?" Label="Priority" @bind-Value="priority" Clearable="true" Variant="Variant.Outlined">
@@ -52,6 +72,13 @@
     [Parameter] public int OrgId { get; set; }
     [Parameter] public TaskDto? Existing { get; set; }
 
+    /// <summary>Org's configurable fields, used to render the Project picker if Project exists.</summary>
+    [Parameter] public IReadOnlyList<EntryFieldDto> Fields { get; set; } = [];
+
+    private EntryFieldDto? ProjectField => Fields.FirstOrDefault(f =>
+        string.Equals(f.FieldKey, "project", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(f.Label, "project", StringComparison.OrdinalIgnoreCase));
+
     private string title = string.Empty;
     private string? description;
     private bool isComplete;
@@ -60,6 +87,7 @@
     private int priorPercent;
     private TaskPriority? priority;
     private DateTime? dueDate;
+    private string? project;
     private bool saving;
     private string? error;
 
@@ -75,6 +103,7 @@
             priorPercent = t.PercentBeforeComplete ?? t.PercentComplete;
             priority = t.Priority;
             dueDate = t.DueDate?.ToDateTime(TimeOnly.MinValue);
+            project = t.Project;
         }
     }
 
@@ -100,6 +129,7 @@
                 PercentBeforeComplete = isComplete ? priorPercent : null,
                 Priority = priority,
                 DueDate = dueDate is { } d ? DateOnly.FromDateTime(d) : null,
+                Project = project,
             };
             var result = Existing is null
                 ? await Api.CreateTaskAsync(OrgId, request)
