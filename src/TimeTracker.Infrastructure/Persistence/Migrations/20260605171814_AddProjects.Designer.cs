@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TimeTracker.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using TimeTracker.Infrastructure.Persistence;
 namespace TimeTracker.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(TimeTrackerDbContext))]
-    partial class TimeTrackerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260605171814_AddProjects")]
+    partial class AddProjects
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -541,10 +544,6 @@ namespace TimeTracker.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(200)")
                         .HasColumnName("project");
 
-                    b.Property<int?>("ProjectId")
-                        .HasColumnType("int")
-                        .HasColumnName("project_id");
-
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(300)
@@ -558,8 +557,6 @@ namespace TimeTracker.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("OrganizationId");
-
-                    b.HasIndex("ProjectId");
 
                     b.HasIndex("UserId", "IsComplete");
 
@@ -604,10 +601,6 @@ namespace TimeTracker.Infrastructure.Persistence.Migrations
                         .HasColumnType("int")
                         .HasColumnName("organization_id");
 
-                    b.Property<int?>("ProjectId")
-                        .HasColumnType("int")
-                        .HasColumnName("project_id");
-
                     b.Property<int>("Source")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
@@ -645,8 +638,6 @@ namespace TimeTracker.Infrastructure.Persistence.Migrations
                         .HasColumnName("user_id");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
 
                     b.HasIndex("TaskId");
 
@@ -1018,7 +1009,7 @@ namespace TimeTracker.Infrastructure.Persistence.Migrations
                     b.HasOne("TimeTracker.Domain.Entities.Organization", "Organization")
                         .WithMany()
                         .HasForeignKey("OrganizationId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Organization");
@@ -1050,11 +1041,6 @@ namespace TimeTracker.Infrastructure.Persistence.Migrations
                         .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("TimeTracker.Domain.Entities.Project", "ProjectEntity")
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("TimeTracker.Domain.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -1062,8 +1048,6 @@ namespace TimeTracker.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Organization");
-
-                    b.Navigation("ProjectEntity");
 
                     b.Navigation("User");
                 });
@@ -1075,11 +1059,6 @@ namespace TimeTracker.Infrastructure.Persistence.Migrations
                         .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("TimeTracker.Domain.Entities.Project", "Project")
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("TimeTracker.Domain.Entities.TaskItem", "Task")
                         .WithMany("TimeEntries")
@@ -1093,8 +1072,6 @@ namespace TimeTracker.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Organization");
-
-                    b.Navigation("Project");
 
                     b.Navigation("Task");
 

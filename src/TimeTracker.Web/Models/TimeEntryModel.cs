@@ -8,5 +8,6 @@ public class TimeEntryModel
     public TimeOnly? StartTime { get; set; } = TimeOnly.FromDateTime(DateTime.Now);
     public int? DurationMinutes { get; set; }
     public int? TaskId { get; set; }
+    public int? ProjectId { get; set; }
     public Dictionary<int, string?> Attributes { get; set; } = new();
 }

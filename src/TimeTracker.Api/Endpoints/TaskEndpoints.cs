@@ -26,7 +26,9 @@ public static class TaskEndpoints
                 .OrderBy(t => t.IsComplete).ThenByDescending(t => t.Id)
                 .Select(t => new TaskDto(t.Id, t.Title, t.Description, t.IsComplete,
                     t.EstimatedHours, t.PercentComplete, t.PercentBeforeComplete,
-                    t.Priority, t.DueDate, t.Project, t.CreatedUtc))
+                    t.Priority, t.DueDate, t.Project,
+                    t.ProjectId, t.ProjectEntity != null ? t.ProjectEntity.Name : null,
+                    t.CreatedUtc))
                 .ToListAsync();
 
             return Results.Ok(tasks);
@@ -60,6 +62,7 @@ public static class TaskEndpoints
                 Priority = request.Priority,
                 DueDate = request.DueDate,
                 Project = string.IsNullOrWhiteSpace(request.Project) ? null : request.Project.Trim(),
+                ProjectId = request.ProjectId,
                 CreatedUtc = DateTime.UtcNow,
             };
             db.Tasks.Add(task);
@@ -96,6 +99,7 @@ public static class TaskEndpoints
             task.Priority = request.Priority;
             task.DueDate = request.DueDate;
             task.Project = string.IsNullOrWhiteSpace(request.Project) ? null : request.Project.Trim();
+            task.ProjectId = request.ProjectId;
             task.ModifiedUtc = DateTime.UtcNow;
 
             await db.SaveChangesAsync();

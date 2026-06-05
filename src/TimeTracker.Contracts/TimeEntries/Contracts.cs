@@ -27,6 +27,9 @@ public record CreateTimeEntryRequest
     public int? DurationMinutes { get; init; }
     public int? TaskId { get; init; }
 
+    /// <summary>Optional first-class project this entry is logged against.</summary>
+    public int? ProjectId { get; init; }
+
     /// <summary>Values for configurable fields, keyed by TimeEntryField Id.</summary>
     public Dictionary<int, string?> Attributes { get; init; } = new();
 }
@@ -43,6 +46,8 @@ public record TimeEntryDto(
     string Note,
     int? TaskId,
     string? TaskTitle,
+    int? ProjectId,
+    string? ProjectName,
     DateTime CreatedUtc,
     TimeEntrySource Source,
     bool SourceIsRecurring,

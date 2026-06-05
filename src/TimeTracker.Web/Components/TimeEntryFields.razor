@@ -1,3 +1,4 @@
+@using TimeTracker.Contracts.Projects
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Contracts.Tasks
 @using TimeTracker.Domain.Enums
@@ -23,6 +24,17 @@
                          Min="0" Variant="Variant.Outlined" />
     </MudItem>
 </MudGrid>
+
+@if (Projects is { Count: > 0 })
+{
+    <MudSelect T="int?" Label="Project" Value="Model.ProjectId" ValueChanged="OnProjectChanged" Clearable="true"
+               Variant="Variant.Outlined" Class="mt-3" Placeholder="No project">
+        @foreach (var p in Projects)
+        {
+            <MudSelectItem T="int?" Value="@((int?)p.Id)">@p.Name</MudSelectItem>
+        }
+    </MudSelect>
+}
 
 @if (Tasks is { Count: > 0 })
 {
@@ -130,6 +142,7 @@
     [Parameter, EditorRequired] public TimeEntryModel Model { get; set; } = default!;
     [Parameter] public IReadOnlyList<EntryFieldDto> Fields { get; set; } = [];
     [Parameter] public IReadOnlyList<TaskDto>? Tasks { get; set; }
+    [Parameter] public IReadOnlyList<ProjectPickerDto> Projects { get; set; } = [];
     [Parameter] public int OrgId { get; set; }
 
     /// <summary>When false, the org captures date only — the time field is hidden and cleared.</summary>
@@ -169,19 +182,15 @@
         syncedTaskId = taskId;
         taskPercent = SelectedTask?.PercentComplete ?? 0;
 
-        // If the selected task has a project and the org has a Project field, auto-fill it
-        // (only when the entry's Project is empty — don't overwrite a user's choice).
-        if (SelectedTask?.Project is { } taskProject && !string.IsNullOrWhiteSpace(taskProject)
-            && ProjectField is { } projectField
-            && string.IsNullOrWhiteSpace(GetValue(projectField.Id)))
+        // If the selected task has a project, copy its ProjectId onto the entry — but never
+        // overwrite a value the user has already chosen.
+        if (SelectedTask?.ProjectId is { } taskProjectId && Model.ProjectId is null)
         {
-            SetValue(projectField.Id, taskProject);
+            Model.ProjectId = taskProjectId;
         }
     }
 
-    private EntryFieldDto? ProjectField => Fields.FirstOrDefault(f =>
-        string.Equals(f.FieldKey, "project", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(f.Label, "project", StringComparison.OrdinalIgnoreCase));
+    private void OnProjectChanged(int? projectId) => Model.ProjectId = projectId;
 
     private void OnPercentChanged(int value) => taskPercent = value;
 

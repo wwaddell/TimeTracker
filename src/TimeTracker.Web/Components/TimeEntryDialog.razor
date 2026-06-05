@@ -1,3 +1,4 @@
+@using TimeTracker.Contracts.Projects
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Contracts.Tasks
 @using TimeTracker.Web.Models
@@ -7,7 +8,7 @@
 
 <MudDialog>
     <DialogContent>
-        <TimeEntryFields @ref="entryFields" Model="model" Fields="Fields" Tasks="Tasks"
+        <TimeEntryFields @ref="entryFields" Model="model" Fields="Fields" Tasks="Tasks" Projects="Projects"
                          OrgId="OrgId" RequireTime="RequireTime" />
         @if (Entry is not null && MissingRequired() is { Count: > 0 } missing)
         {
@@ -38,6 +39,7 @@
     [Parameter] public int OrgId { get; set; }
     [Parameter] public IReadOnlyList<EntryFieldDto> Fields { get; set; } = [];
     [Parameter] public IReadOnlyList<TaskDto>? Tasks { get; set; }
+    [Parameter] public IReadOnlyList<ProjectPickerDto> Projects { get; set; } = [];
     [Parameter] public TimeEntryDto? Entry { get; set; }
     [Parameter] public bool RequireTime { get; set; } = true;
 
@@ -60,21 +62,19 @@
                 StartTime = e.StartTime,
                 DurationMinutes = e.DurationMinutes,
                 TaskId = e.TaskId,
+                ProjectId = e.ProjectId,
                 Attributes = e.Attributes.ToDictionary(a => a.FieldId, a => a.Value),
             };
         }
         else if (InitialTaskId is { } taskId)
         {
             model.TaskId = taskId;
-            // Mirror TimeEntryFields.OnTaskChanged: pre-link from "Log time from task"
-            // should also carry the task's project into the entry.
+            // Mirror TimeEntryFields.OnTaskChanged: pre-link from "Log time from task" should
+            // also carry the task's first-class project into the entry.
             var task = Tasks?.FirstOrDefault(t => t.Id == taskId);
-            var projectField = Fields.FirstOrDefault(f =>
-                string.Equals(f.FieldKey, "project", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(f.Label, "project", StringComparison.OrdinalIgnoreCase));
-            if (task?.Project is { } p && !string.IsNullOrWhiteSpace(p) && projectField is not null)
+            if (task?.ProjectId is { } pid)
             {
-                model.Attributes[projectField.Id] = p;
+                model.ProjectId = pid;
             }
         }
     }
@@ -177,6 +177,7 @@
         StartTime = model.StartTime,
         DurationMinutes = model.DurationMinutes,
         TaskId = model.TaskId,
+        ProjectId = model.ProjectId,
         Attributes = new Dictionary<int, string?>(model.Attributes),
     };
 }

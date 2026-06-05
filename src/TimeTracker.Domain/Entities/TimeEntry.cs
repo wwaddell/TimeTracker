@@ -15,6 +15,10 @@ public class TimeEntry : AuditableEntity, ISoftDeletable
     /// <summary>Optional task this entry is logged against.</summary>
     public int? TaskId { get; set; }
 
+    /// <summary>Optional first-class project this entry is logged against.</summary>
+    public int? ProjectId { get; set; }
+    public Project? Project { get; set; }
+
     /// <summary>How this entry was created (manual vs. an external import).</summary>
     public TimeEntrySource Source { get; set; } = TimeEntrySource.Manual;
 

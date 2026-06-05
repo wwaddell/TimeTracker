@@ -27,6 +27,11 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
             .HasForeignKey(x => x.OrganizationId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        builder.HasOne(x => x.ProjectEntity)
+            .WithMany()
+            .HasForeignKey(x => x.ProjectId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasIndex(x => new { x.UserId, x.IsComplete });
     }
 }

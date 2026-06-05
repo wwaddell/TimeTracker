@@ -38,6 +38,11 @@ public class TimeEntryConfiguration : IEntityTypeConfiguration<TimeEntry>
             .HasForeignKey(x => x.TaskId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        builder.HasOne(x => x.Project)
+            .WithMany()
+            .HasForeignKey(x => x.ProjectId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasIndex(x => new { x.UserId, x.EntryDate });
         builder.HasIndex(x => new { x.OrganizationId, x.EntryDate });
 

@@ -14,6 +14,8 @@ public record TaskDto(
     TaskPriority? Priority,
     DateOnly? DueDate,
     string? Project,
+    int? ProjectId,
+    string? ProjectName,
     DateTime CreatedUtc);
 
 /// <summary>Create/update payload for a task.</summary>
@@ -34,6 +36,9 @@ public record SaveTaskRequest
     /// <summary>Optional due date.</summary>
     public DateOnly? DueDate { get; init; }
 
-    /// <summary>Optional project (value of the org's "Project" field) this task belongs to.</summary>
+    /// <summary>Optional legacy project (configurable "Project" field value).</summary>
     public string? Project { get; init; }
+
+    /// <summary>Optional first-class project this task is linked to (preferred).</summary>
+    public int? ProjectId { get; init; }
 }

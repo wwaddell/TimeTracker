@@ -1,0 +1,102 @@
+@using TimeTracker.Contracts.Projects
+@inject TimeTracker.Web.Services.TimeTrackerApi Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string" Label="Name" @bind-Value="name" Required="true"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField T="string" Label="Description" @bind-Value="description" Lines="2"
+                      AutoGrow="true" MaxLines="8" Variant="Variant.Outlined" Class="mb-3" />
+        <div class="d-flex flex-wrap" style="gap:2rem">
+            <MudSwitch T="bool" @bind-Value="isActive" Color="Color.Primary" Label="Active" />
+            <MudSwitch T="bool" @bind-Value="isRestricted" Color="Color.Primary"
+                       Label="Restrict to specific members" />
+        </div>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+            @if (isRestricted)
+            {
+                <span>Only members you add to the project will see it on pickers.</span>
+            }
+            else
+            {
+                <span>All organization members can pick this project.</span>
+            }
+        </MudText>
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
+            @(saving ? "Saving…" : "Save project")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public int OrgId { get; set; }
+    [Parameter] public ProjectDto? Existing { get; set; }
+
+    private string name = string.Empty;
+    private string? description;
+    private bool isActive = true;
+    private bool isRestricted;
+    private bool saving;
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is { } p)
+        {
+            name = p.Name;
+            description = p.Description;
+            isActive = p.IsActive;
+            isRestricted = p.IsRestricted;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            error = "A project name is required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var request = new SaveProjectRequest
+            {
+                Name = name,
+                Description = description,
+                IsActive = isActive,
+                IsRestricted = isRestricted,
+            };
+            var result = Existing is null
+                ? await Api.CreateProjectAsync(OrgId, request)
+                : await Api.UpdateProjectAsync(OrgId, Existing.Id, request);
+
+            if (result.Success)
+            {
+                Snackbar.Add(Existing is null ? "Project created" : "Project updated", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                error = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

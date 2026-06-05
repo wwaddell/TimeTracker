@@ -1,6 +1,7 @@
 @page "/"
 @page "/log"
 @using TimeTracker.Contracts.Me
+@using TimeTracker.Contracts.Projects
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Contracts.Tasks
 @using TimeTracker.Domain.Enums
@@ -98,10 +99,12 @@ else
             {
                 var missing = MissingLabels(entry);
                 var attrs = entry.Attributes.Where(a => !string.IsNullOrWhiteSpace(a.Value) && a.Value != "false").ToList();
-                // Header = Project / Task (bold); the note + remaining fields are the details below.
-                var project = attrs.FirstOrDefault(a => string.Equals(a.Label, "Project", StringComparison.OrdinalIgnoreCase));
+                // Header = Project / Task (bold). Prefer the first-class ProjectName (FK) over
+                // the legacy "Project" attribute, but keep the attribute fallback for old data.
+                var legacyProject = attrs.FirstOrDefault(a => string.Equals(a.Label, "Project", StringComparison.OrdinalIgnoreCase));
+                var projectName = entry.ProjectName ?? legacyProject?.Value;
                 var headerParts = new List<string>();
-                if (project is not null) { headerParts.Add(project.Value!); }
+                if (!string.IsNullOrWhiteSpace(projectName)) { headerParts.Add(projectName); }
                 if (entry.TaskTitle is not null) { headerParts.Add(entry.TaskTitle); }
                 var hasHeader = headerParts.Count > 0;
                 var header = string.Join(" · ", headerParts);
@@ -109,12 +112,12 @@ else
                 // Lead glyph: the category's icon if set, else a project/task/default icon — so
                 // every row has a consistent header.
                 var leadIcon = cat.Icon
-                    ?? (project is not null ? Icons.Material.Filled.Folder
+                    ?? (!string.IsNullOrWhiteSpace(projectName) ? Icons.Material.Filled.Folder
                         : entry.TaskTitle is not null ? Icons.Material.Filled.Assignment
                         : Icons.Material.Filled.Schedule);
-                // Below: everything except Project (in the header) and Category (shown as the icon).
+                // Below: hide the legacy Project attribute (it's in the header) and Category (icon).
                 var detailAttrs = attrs.Where(a =>
-                    (project is null || a.FieldId != project.FieldId)
+                    (legacyProject is null || a.FieldId != legacyProject.FieldId)
                     && (cat.Icon is null || a.FieldId != cat.FieldId)).ToList();
                 <MudPaper Class="pa-4" Outlined="true" Style="cursor:pointer"
                           @onclick="@(() => OpenEdit(entry))">
@@ -210,6 +213,7 @@ else
     private MeDto? me;
     private IReadOnlyList<EntryFieldDto>? fields;
     private IReadOnlyList<TaskDto>? tasks;
+    private IReadOnlyList<ProjectPickerDto>? projects;
     private IReadOnlyList<TimeEntryDto>? entries;
     private int selectedOrgId;
     private int page = 1;
@@ -295,6 +299,7 @@ else
     {
         fields = await Api.GetEntryFieldsAsync(selectedOrgId);
         tasks = await Api.GetTasksAsync(selectedOrgId);
+        projects = await Api.GetVisibleProjectsAsync(selectedOrgId);
         await LoadEntriesAsync();
     }
 
@@ -364,6 +369,7 @@ else
             { x => x.OrgId, selectedOrgId },
             { x => x.Fields, fields ?? [] },
             { x => x.Tasks, tasks },
+            { x => x.Projects, projects ?? [] },
             { x => x.Entry, entry },
             { x => x.RequireTime, OrgRequiresTime },
         };

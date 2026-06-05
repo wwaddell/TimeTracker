@@ -5,6 +5,7 @@ using TimeTracker.Contracts.Calendar;
 using TimeTracker.Contracts.Me;
 using TimeTracker.Contracts.Members;
 using TimeTracker.Contracts.Organizations;
+using TimeTracker.Contracts.Projects;
 using TimeTracker.Contracts.Rights;
 using TimeTracker.Contracts.Roles;
 using TimeTracker.Contracts.Tasks;
@@ -43,6 +44,32 @@ public class TimeTrackerApi(HttpClient http)
 
     public async Task<ApiResult> DeleteTimeEntryAsync(int orgId, long id) =>
         await SendAsync(() => http.DeleteAsync($"/api/organizations/{orgId}/time-entries/{id}"));
+
+    // --- Projects ---
+
+    public async Task<IReadOnlyList<ProjectPickerDto>> GetVisibleProjectsAsync(int orgId) =>
+        await GetAsync<List<ProjectPickerDto>>($"/api/organizations/{orgId}/projects/visible") ?? [];
+
+    public async Task<IReadOnlyList<ProjectDto>> GetProjectsAsync(int orgId) =>
+        await GetAsync<List<ProjectDto>>($"/api/organizations/{orgId}/projects") ?? [];
+
+    public async Task<ApiResult> CreateProjectAsync(int orgId, SaveProjectRequest request) =>
+        await SendAsync(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/projects", request));
+
+    public async Task<ApiResult> UpdateProjectAsync(int orgId, int id, SaveProjectRequest request) =>
+        await SendAsync(() => http.PutAsJsonAsync($"/api/organizations/{orgId}/projects/{id}", request));
+
+    public async Task<ApiResult> DeleteProjectAsync(int orgId, int id) =>
+        await SendAsync(() => http.DeleteAsync($"/api/organizations/{orgId}/projects/{id}"));
+
+    public async Task<IReadOnlyList<ProjectMemberDto>> GetProjectMembersAsync(int orgId, int id) =>
+        await GetAsync<List<ProjectMemberDto>>($"/api/organizations/{orgId}/projects/{id}/members") ?? [];
+
+    public async Task<ApiResult> AddProjectMemberAsync(int orgId, int id, AddProjectMemberRequest request) =>
+        await SendAsync(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/projects/{id}/members", request));
+
+    public async Task<ApiResult> RemoveProjectMemberAsync(int orgId, int id, int userId) =>
+        await SendAsync(() => http.DeleteAsync($"/api/organizations/{orgId}/projects/{id}/members/{userId}"));
 
     // --- Tasks ---
 

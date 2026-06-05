@@ -1,0 +1,134 @@
+@using TimeTracker.Contracts.Projects
+@inject TimeTracker.Web.Services.TimeTrackerApi Api
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle2" Class="mb-1">Members</MudText>
+        @if (members is null)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (members.Count == 0)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">No members yet — add one below.</MudText>
+        }
+        else
+        {
+            <MudList T="string" Dense="true">
+                @foreach (var m in members)
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.Person">
+                        <div class="d-flex justify-space-between align-center" style="gap:1rem">
+                            <div>
+                                <MudText Typo="Typo.body2">
+                                    <b>@m.DisplayName</b>
+                                    @if (m.IsPending)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">Pending</MudChip>
+                                    }
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@m.Email</MudText>
+                            </div>
+                            <MudTooltip Text="Remove">
+                                <MudIconButton Icon="@Icons.Material.Filled.PersonRemove" Color="Color.Error" Size="Size.Small"
+                                               OnClick="@(() => RemoveAsync(m))" />
+                            </MudTooltip>
+                        </div>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+
+        <MudDivider Class="my-3" />
+        <MudText Typo="Typo.subtitle2" Class="mb-2">Add member</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="7">
+                <MudTextField T="string" Label="Email" @bind-Value="email" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="5">
+                <MudTextField T="string" Label="Display name (optional)" @bind-Value="displayName"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+        </MudGrid>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+                   Class="mt-2" OnClick="AddAsync" Disabled="saving">
+            @(saving ? "Adding…" : "Add member")
+        </MudButton>
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Close())">Done</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public int OrgId { get; set; }
+    [Parameter] public int ProjectId { get; set; }
+
+    private IReadOnlyList<ProjectMemberDto>? members;
+    private string email = string.Empty;
+    private string? displayName;
+    private bool saving;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => members = await Api.GetProjectMembersAsync(OrgId, ProjectId);
+
+    private async Task AddAsync()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+        {
+            error = "A valid email is required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var result = await Api.AddProjectMemberAsync(OrgId, ProjectId,
+                new AddProjectMemberRequest { Email = email, DisplayName = displayName });
+            if (result.Success)
+            {
+                Snackbar.Add("Member added", Severity.Success);
+                email = string.Empty;
+                displayName = null;
+                await LoadAsync();
+            }
+            else
+            {
+                error = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task RemoveAsync(ProjectMemberDto m)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Remove {m.DisplayName} from this project?"))
+        {
+            return;
+        }
+
+        var result = await Api.RemoveProjectMemberAsync(OrgId, ProjectId, m.UserId);
+        if (result.Success)
+        {
+            Snackbar.Add("Member removed", Severity.Success);
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Add(result.Error ?? "Could not remove the member.", Severity.Error);
+        }
+    }
+}

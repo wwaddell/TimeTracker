@@ -1,5 +1,6 @@
 @page "/tasks"
 @using TimeTracker.Contracts.Me
+@using TimeTracker.Contracts.Projects
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Contracts.Tasks
 @using TimeTracker.Domain.Enums
@@ -111,6 +112,13 @@ else
                              Style="@(context.IsComplete ? "text-decoration:line-through" : "")">
                         <b>@context.Title</b>
                     </MudText>
+                    @if (!string.IsNullOrWhiteSpace(context.ProjectName))
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-flex align-center" Style="gap:.25rem">
+                            <MudIcon Icon="@Icons.Material.Filled.Folder" Size="Size.Small" Color="Color.Primary" />
+                            @context.ProjectName
+                        </MudText>
+                    }
                     @if (!string.IsNullOrWhiteSpace(context.Description))
                     {
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Description</MudText>
@@ -165,6 +173,7 @@ else
     private MeDto? me;
     private IReadOnlyList<TaskDto>? tasks;
     private IReadOnlyList<EntryFieldDto>? fields;
+    private IReadOnlyList<ProjectPickerDto>? projects;
     private int selectedOrgId;
     private string? loadError;
 
@@ -207,6 +216,7 @@ else
     {
         tasks = await Api.GetTasksAsync(selectedOrgId);
         fields = await Api.GetEntryFieldsAsync(selectedOrgId);
+        projects = await Api.GetVisibleProjectsAsync(selectedOrgId);
     }
 
     private async Task OpenDialogAsync(TaskDto? task)
@@ -215,7 +225,7 @@ else
         {
             { x => x.OrgId, selectedOrgId },
             { x => x.Existing, task },
-            { x => x.Fields, fields ?? [] },
+            { x => x.Projects, projects ?? [] },
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
         var dialog = await DialogService.ShowAsync<TaskDialog>(task is null ? "New task" : "Edit task", parameters, options);
@@ -233,6 +243,7 @@ else
             { x => x.OrgId, selectedOrgId },
             { x => x.Fields, fields ?? [] },
             { x => x.Tasks, tasks },
+            { x => x.Projects, projects ?? [] },
             { x => x.Entry, (TimeEntryDto?)null },
             { x => x.RequireTime, OrgRequiresTime },
             { x => x.InitialTaskId, (int?)task.Id },

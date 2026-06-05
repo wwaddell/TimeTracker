@@ -21,6 +21,10 @@ public class TaskItem : AuditableEntity, ISoftDeletable
     /// <summary>Optional project (value of the org's configurable "Project" field) this task belongs to.</summary>
     public string? Project { get; set; }
 
+    /// <summary>Optional first-class project this task belongs to (preferred over <see cref="Project"/>).</summary>
+    public int? ProjectId { get; set; }
+    public Project? ProjectEntity { get; set; }
+
     /// <summary>Optional priority (null = none).</summary>
     public TaskPriority? Priority { get; set; }
 

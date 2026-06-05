@@ -27,6 +27,8 @@ public class TimeTrackerDbContext(DbContextOptions<TimeTrackerDbContext> options
     public DbSet<CalendarSeriesTag> CalendarSeriesTags => Set<CalendarSeriesTag>();
     public DbSet<CalendarSeriesTagAttribute> CalendarSeriesTagAttributes => Set<CalendarSeriesTagAttribute>();
     public DbSet<CalendarConnection> CalendarConnections => Set<CalendarConnection>();
+    public DbSet<Project> Projects => Set<Project>();
+    public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -37,6 +39,7 @@ public class TimeTrackerDbContext(DbContextOptions<TimeTrackerDbContext> options
         // Soft delete: exclude rows with DeletedUtc set from every query automatically.
         modelBuilder.Entity<TaskItem>().HasQueryFilter(t => t.DeletedUtc == null);
         modelBuilder.Entity<TimeEntry>().HasQueryFilter(e => e.DeletedUtc == null);
+        modelBuilder.Entity<Project>().HasQueryFilter(p => p.DeletedUtc == null);
 
         // Map every column to snake_case based on its CLR property name so the
         // schema matches the house naming style (note, entry_date, organization_id, ...).

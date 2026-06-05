@@ -1,0 +1,220 @@
+@page "/admin/projects"
+@using TimeTracker.Contracts.Me
+@using TimeTracker.Contracts.Projects
+@using TimeTracker.Contracts.TimeEntries
+@using TimeTracker.Web.Components
+@using TimeTracker.Web.Services
+@inject TimeTrackerApi Api
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IJSRuntime JS
+
+<PageTitle>Projects</PageTitle>
+
+@if (loadError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <div class="d-flex align-center justify-space-between" style="gap:1rem">
+            <span>@loadError</span>
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAllAsync">Retry</MudButton>
+        </div>
+    </MudAlert>
+}
+
+@if (organizations is null)
+{
+    @if (loadError is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+}
+else if (organizations.Count == 0)
+{
+    <MudAlert Severity="Severity.Warning">No organizations available for your account.</MudAlert>
+}
+else
+{
+    @if (organizations.Count > 1 && me?.HideOrgSwitcher != true)
+    {
+        <MudSelect T="int" Label="Organization" Value="selectedOrgId" ValueChanged="OnOrgChanged"
+                   Variant="Variant.Outlined" Class="mb-4" Style="max-width:420px">
+            @foreach (var org in organizations)
+            {
+                <MudSelectItem T="int" Value="@org.Id">@org.Name</MudSelectItem>
+            }
+        </MudSelect>
+    }
+
+    <div class="d-flex justify-space-between align-center mb-3">
+        <MudText Typo="Typo.h5">Projects</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => OpenEditAsync(null))">New project</MudButton>
+    </div>
+
+    @if (projects is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (projects.Count == 0)
+    {
+        <MudText Class="mud-text-secondary">No projects yet. Create one so members can log time against it.</MudText>
+    }
+    else
+    {
+        <MudTable Items="projects" Hover="true" Dense="true" Elevation="1">
+            <HeaderContent>
+                <MudTh>Name</MudTh>
+                <MudTh>Description</MudTh>
+                <MudTh Style="width:1px; white-space:nowrap; text-align:center">Active</MudTh>
+                <MudTh Style="width:1px; white-space:nowrap; text-align:center">Visibility</MudTh>
+                <MudTh Style="width:1px"></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd><b>@context.Name</b></MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Description</MudText>
+                </MudTd>
+                <MudTd Style="text-align:center">
+                    @if (context.IsActive)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                    }
+                    else
+                    {
+                        <MudTooltip Text="Inactive"><MudIcon Icon="@Icons.Material.Filled.Block" Size="Size.Small" /></MudTooltip>
+                    }
+                </MudTd>
+                <MudTd Style="text-align:center">
+                    @if (context.IsRestricted)
+                    {
+                        <MudTooltip Text="@($"{context.MemberCount} member{(context.MemberCount == 1 ? "" : "s")}")">
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning"
+                                     Icon="@Icons.Material.Filled.Lock">@context.MemberCount</MudChip>
+                        </MudTooltip>
+                    }
+                    else
+                    {
+                        <MudTooltip Text="All org members can see this project">
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                     Icon="@Icons.Material.Filled.Public">All</MudChip>
+                        </MudTooltip>
+                    }
+                </MudTd>
+                <MudTd Style="text-align:right; white-space:nowrap">
+                    @if (context.IsRestricted)
+                    {
+                        <MudTooltip Text="Manage members">
+                            <MudIconButton Icon="@Icons.Material.Filled.People" Size="Size.Small"
+                                           OnClick="@(() => OpenMembersAsync(context))" />
+                        </MudTooltip>
+                    }
+                    <MudTooltip Text="Edit">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                       OnClick="@(() => OpenEditAsync(context))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Delete">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                       OnClick="@(() => DeleteAsync(context))" />
+                    </MudTooltip>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+}
+
+@code {
+    private IReadOnlyList<OrganizationDto>? organizations;
+    private MeDto? me;
+    private IReadOnlyList<ProjectDto>? projects;
+    private int selectedOrgId;
+    private string? loadError;
+
+    protected override Task OnInitializedAsync() => ReloadAllAsync();
+
+    private Task ReloadAllAsync() => GuardAsync(async () =>
+    {
+        organizations = await Api.GetOrganizationsAsync();
+        me ??= await Api.GetMeAsync();
+        if (organizations.Count > 0)
+        {
+            if (selectedOrgId == 0)
+            {
+                selectedOrgId = organizations[0].Id;
+            }
+            await LoadAsync();
+        }
+    });
+
+    private async Task OnOrgChanged(int orgId)
+    {
+        selectedOrgId = orgId;
+        await GuardAsync(LoadAsync);
+    }
+
+    private async Task LoadAsync() => projects = await Api.GetProjectsAsync(selectedOrgId);
+
+    private async Task OpenEditAsync(ProjectDto? project)
+    {
+        var parameters = new DialogParameters<ProjectDialog>
+        {
+            { x => x.OrgId, selectedOrgId },
+            { x => x.Existing, project },
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<ProjectDialog>(project is null ? "New project" : "Edit project", parameters, options);
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task OpenMembersAsync(ProjectDto project)
+    {
+        var parameters = new DialogParameters<ProjectMembersDialog>
+        {
+            { x => x.OrgId, selectedOrgId },
+            { x => x.ProjectId, project.Id },
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<ProjectMembersDialog>($"Members — {project.Name}", parameters, options);
+        await dialog.Result;
+        await LoadAsync(); // member counts may have changed
+    }
+
+    private async Task DeleteAsync(ProjectDto project)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete the project \"{project.Name}\"?"))
+        {
+            return;
+        }
+
+        var result = await Api.DeleteProjectAsync(selectedOrgId, project.Id);
+        if (result.Success)
+        {
+            Snackbar.Add("Project deleted", Severity.Success);
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Add(result.Error ?? "Could not delete the project.", Severity.Error);
+        }
+    }
+
+    private async Task GuardAsync(Func<Task> action)
+    {
+        try
+        {
+            loadError = null;
+            await action();
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex.Message;
+        }
+        catch
+        {
+            loadError = "Something went wrong loading projects. Please retry.";
+        }
+    }
+}

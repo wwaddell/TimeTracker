@@ -84,6 +84,8 @@ public static class TimeEntryEndpoints
                     e.Id, e.EntryDate, e.StartTime, e.DurationMinutes, e.Note,
                     e.TaskId,
                     e.Task != null ? e.Task.Title : null,
+                    e.ProjectId,
+                    e.Project != null ? e.Project.Name : null,
                     e.CreatedUtc,
                     e.Source,
                     e.SourceIsRecurring,
@@ -125,6 +127,7 @@ public static class TimeEntryEndpoints
                 UserId = userId,
                 OrganizationId = orgId,
                 TaskId = request.TaskId,
+                ProjectId = request.ProjectId,
                 EntryDate = request.EntryDate == default ? DateOnly.FromDateTime(DateTime.Now) : request.EntryDate,
                 StartTime = request.StartTime,
                 DurationMinutes = request.DurationMinutes,
@@ -170,6 +173,7 @@ public static class TimeEntryEndpoints
             }
 
             entry.TaskId = request.TaskId;
+            entry.ProjectId = request.ProjectId;
             entry.EntryDate = request.EntryDate == default ? entry.EntryDate : request.EntryDate;
             entry.StartTime = request.StartTime;
             entry.DurationMinutes = request.DurationMinutes;

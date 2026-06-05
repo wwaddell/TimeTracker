@@ -118,5 +118,6 @@ app.MapRoleEndpoints();
 app.MapCalendarEndpoints();
 app.MapGlobalAdminEndpoints();
 app.MapMeEndpoints();
+app.MapProjectEndpoints();
 
 app.Run();
