@@ -42,9 +42,10 @@ public class TimeEntryConfiguration : IEntityTypeConfiguration<TimeEntry>
         builder.HasIndex(x => new { x.OrganizationId, x.EntryDate });
 
         // Enforce idempotent imports: a given calendar occurrence can be logged at most
-        // once per user per org. Filtered so it only applies to imported rows.
+        // once per user per org. Filtered to imported, non-deleted rows — so soft-deleting an
+        // imported entry frees it to be imported again.
         builder.HasIndex(x => new { x.OrganizationId, x.UserId, x.SourceSeriesUid, x.SourceOccurrenceStartUtc })
             .IsUnique()
-            .HasFilter("[source_series_uid] IS NOT NULL");
+            .HasFilter("[source_series_uid] IS NOT NULL AND [deleted_utc] IS NULL");
     }
 }

@@ -34,6 +34,10 @@ public class TimeTrackerDbContext(DbContextOptions<TimeTrackerDbContext> options
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(TimeTrackerDbContext).Assembly);
 
+        // Soft delete: exclude rows with DeletedUtc set from every query automatically.
+        modelBuilder.Entity<TaskItem>().HasQueryFilter(t => t.DeletedUtc == null);
+        modelBuilder.Entity<TimeEntry>().HasQueryFilter(e => e.DeletedUtc == null);
+
         // Map every column to snake_case based on its CLR property name so the
         // schema matches the house naming style (note, entry_date, organization_id, ...).
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())

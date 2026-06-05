@@ -6,7 +6,7 @@ namespace TimeTracker.Domain.Entities;
 /// A task a user may need to work on. Optional target of a time entry — logging
 /// activity does not require a task. Table: <c>t_task</c>.
 /// </summary>
-public class TaskItem : AuditableEntity
+public class TaskItem : AuditableEntity, ISoftDeletable
 {
     public int Id { get; set; }
     public int UserId { get; set; }
@@ -32,6 +32,9 @@ public class TaskItem : AuditableEntity
 
     /// <summary>The percent held just before the task was marked complete, so unchecking can revert.</summary>
     public int? PercentBeforeComplete { get; set; }
+
+    /// <summary>Set when soft-deleted; excluded from queries by a global filter.</summary>
+    public DateTime? DeletedUtc { get; set; }
 
     public User User { get; set; } = null!;
     public Organization? Organization { get; set; }

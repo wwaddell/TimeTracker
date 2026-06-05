@@ -6,7 +6,7 @@ namespace TimeTracker.Domain.Entities;
 /// A logged time entry. Core fields are always present; org/role-defined extra
 /// fields are stored as <see cref="Attributes"/> rows. Table: <c>t_time_entry</c>.
 /// </summary>
-public class TimeEntry : AuditableEntity
+public class TimeEntry : AuditableEntity, ISoftDeletable
 {
     public long Id { get; set; }
     public int UserId { get; set; }
@@ -47,6 +47,9 @@ public class TimeEntry : AuditableEntity
 
     /// <summary>The always-required base field: a note of what was completed.</summary>
     public string Note { get; set; } = string.Empty;
+
+    /// <summary>Set when soft-deleted; excluded from queries by a global filter.</summary>
+    public DateTime? DeletedUtc { get; set; }
 
     public User User { get; set; } = null!;
     public Organization Organization { get; set; } = null!;

@@ -100,7 +100,7 @@ public static class TaskEndpoints
             return Results.Ok(new { task.Id });
         });
 
-        // Delete a task (linked time entries keep their data; their task link is cleared).
+        // Soft-delete a task: it disappears from lists but the row (and any linked entries) is kept.
         api.MapDelete("/api/organizations/{orgId:int}/tasks/{id:int}",
             async (int orgId, int id, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
@@ -112,7 +112,8 @@ public static class TaskEndpoints
                 return Results.NotFound();
             }
 
-            db.Tasks.Remove(task);
+            task.DeletedUtc = DateTime.UtcNow;
+            task.ModifiedUtc = DateTime.UtcNow;
             await db.SaveChangesAsync();
             return Results.NoContent();
         });

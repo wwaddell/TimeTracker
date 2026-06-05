@@ -197,7 +197,8 @@ public static class TimeEntryEndpoints
             return Results.Ok(new { entry.Id });
         });
 
-        // Delete a time entry (its attributes cascade).
+        // Soft-delete a time entry: it disappears from lists but the row is preserved
+        // (and an imported occurrence becomes available to import again).
         api.MapDelete("/api/organizations/{orgId:int}/time-entries/{id:long}",
             async (int orgId, long id, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
@@ -209,7 +210,8 @@ public static class TimeEntryEndpoints
                 return Results.NotFound();
             }
 
-            db.TimeEntries.Remove(entry);
+            entry.DeletedUtc = DateTime.UtcNow;
+            entry.ModifiedUtc = DateTime.UtcNow;
             await db.SaveChangesAsync();
             return Results.NoContent();
         });
