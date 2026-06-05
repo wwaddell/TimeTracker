@@ -3,8 +3,10 @@
 @using TimeTracker.Contracts.Organizations
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Domain.Enums
+@using TimeTracker.Web.Components
 @using TimeTracker.Web.Services
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
+@inject IDialogService DialogService
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 
@@ -60,95 +62,9 @@ else
 
     <div class="d-flex justify-space-between align-center mb-3">
         <MudText Typo="Typo.h5">Configurable fields</MudText>
-        @if (!showEditor)
-        {
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="NewField">Add field</MudButton>
-        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddField">Add field</MudButton>
     </div>
-
-    @if (showEditor && editing is not null)
-    {
-        <MudCard Class="mb-4" Elevation="2">
-            <MudCardContent>
-                <MudText Typo="Typo.h6" Class="mb-2">@(editing.Id == 0 ? "New field" : $"Edit \"{editing.Label}\"")</MudText>
-                <MudGrid>
-                    <MudItem xs="12" sm="6">
-                        <MudTextField T="string" Label="Label" @bind-Value="editing.Label" Required="true"
-                                      Variant="Variant.Outlined" />
-                    </MudItem>
-                    <MudItem xs="12" sm="6">
-                        <MudTextField T="string" Label="Key" @bind-Value="editing.FieldKey" Required="true"
-                                      Variant="Variant.Outlined" Placeholder="e.g. project_code" />
-                    </MudItem>
-                    <MudItem xs="12" sm="4">
-                        <MudSelect T="FieldDataType" Label="Type" @bind-Value="editing.DataType" Variant="Variant.Outlined">
-                            @foreach (var dt in Enum.GetValues<FieldDataType>())
-                            {
-                                <MudSelectItem T="FieldDataType" Value="@dt">@dt</MudSelectItem>
-                            }
-                        </MudSelect>
-                    </MudItem>
-                    <MudItem xs="12" sm="4">
-                        <MudSelect T="int?" Label="Role" @bind-Value="editing.OrganizationRoleId" Variant="Variant.Outlined">
-                            <MudSelectItem T="int?" Value="@((int?)null)">All roles</MudSelectItem>
-                            @foreach (var role in roles ?? [])
-                            {
-                                <MudSelectItem T="int?" Value="@((int?)role.Id)">@role.Name</MudSelectItem>
-                            }
-                        </MudSelect>
-                    </MudItem>
-                    <MudItem xs="12" sm="4">
-                        <MudNumericField T="int" Label="Sort order" @bind-Value="editing.SortOrder" Variant="Variant.Outlined" />
-                    </MudItem>
-                    <MudItem xs="12">
-                        <MudCheckBox T="bool" Label="Required" @bind-Value="editing.IsRequired" />
-                        <MudCheckBox T="bool" Label="Active" @bind-Value="editing.IsActive" />
-                    </MudItem>
-                </MudGrid>
-
-                @if (editing.DataType == FieldDataType.Select)
-                {
-                    <MudDivider Class="my-3" />
-                    <div class="d-flex justify-space-between align-center mb-2">
-                        <MudText Typo="Typo.subtitle1">Options</MudText>
-                        <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddOption">Add option</MudButton>
-                    </div>
-                    @if (editing.Options.Count == 0)
-                    {
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Add at least one option for a select field.</MudText>
-                    }
-                    @foreach (var opt in editing.Options)
-                    {
-                        <MudGrid Class="align-center mb-1">
-                            <MudItem xs="5">
-                                <MudTextField T="string" Placeholder="Value" @bind-Value="opt.Value" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            </MudItem>
-                            <MudItem xs="5">
-                                <MudTextField T="string" Placeholder="Label" @bind-Value="opt.Label" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            </MudItem>
-                            <MudItem xs="2">
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
-                                               OnClick="@(() => RemoveOption(opt))" />
-                            </MudItem>
-                        </MudGrid>
-                    }
-                }
-
-                @if (errorMessage is not null)
-                {
-                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@errorMessage</MudAlert>
-                }
-            </MudCardContent>
-            <MudCardActions>
-                <MudSpacer />
-                <MudButton OnClick="CancelEdit">Cancel</MudButton>
-                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
-                    @(saving ? "Saving…" : "Save field")
-                </MudButton>
-            </MudCardActions>
-        </MudCard>
-    }
 
     @if (fields is null)
     {
@@ -175,7 +91,7 @@ else
                 <MudTd>@context.SortOrder</MudTd>
                 <MudTd Style="text-align:right; white-space:nowrap">
                     <MudTooltip Text="Edit">
-                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditField(context))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenEditField(context))" />
                     </MudTooltip>
                     <MudTooltip Text="Delete">
                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteFieldAsync(context))" />
@@ -192,11 +108,6 @@ else
     private IReadOnlyList<EntryFieldAdminDto>? fields;
     private int selectedOrgId;
     private bool requireTime = true;
-
-    private FieldEditModel? editing;
-    private bool showEditor;
-    private bool saving;
-    private string? errorMessage;
     private string? infoMessage;
     private string? loadError;
 
@@ -218,7 +129,6 @@ else
     private async Task OnOrgChanged(int orgId)
     {
         selectedOrgId = orgId;
-        CancelEdit();
         infoMessage = null;
         await GuardAsync(LoadAsync);
     }
@@ -263,87 +173,26 @@ else
         }
     }
 
-    private void NewField()
+    private Task OpenAddField() => ShowFieldDialogAsync(null);
+
+    private Task OpenEditField(EntryFieldAdminDto field) => ShowFieldDialogAsync(field);
+
+    private async Task ShowFieldDialogAsync(EntryFieldAdminDto? field)
     {
         var nextSort = (fields is { Count: > 0 } ? fields.Max(f => f.SortOrder) : 0) + 1;
-        editing = new FieldEditModel { SortOrder = nextSort, IsActive = true, DataType = FieldDataType.Text };
-        errorMessage = null;
-        showEditor = true;
-    }
-
-    private void EditField(EntryFieldAdminDto f)
-    {
-        editing = new FieldEditModel
+        var parameters = new DialogParameters<FieldDialog>
         {
-            Id = f.Id,
-            FieldKey = f.FieldKey,
-            Label = f.Label,
-            DataType = f.DataType,
-            IsRequired = f.IsRequired,
-            SortOrder = f.SortOrder,
-            IsActive = f.IsActive,
-            OrganizationRoleId = f.OrganizationRoleId,
-            Options = f.Options.Select(o => new OptionEditModel { Value = o.Value, Label = o.Label }).ToList(),
+            { x => x.OrgId, selectedOrgId },
+            { x => x.Roles, roles ?? [] },
+            { x => x.Existing, field },
+            { x => x.NextSortOrder, nextSort },
         };
-        errorMessage = null;
-        showEditor = true;
-    }
-
-    private void CancelEdit()
-    {
-        showEditor = false;
-        editing = null;
-        errorMessage = null;
-    }
-
-    private void AddOption() => editing?.Options.Add(new OptionEditModel());
-
-    private void RemoveOption(OptionEditModel opt) => editing?.Options.Remove(opt);
-
-    private async Task SaveAsync()
-    {
-        if (editing is null)
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<FieldDialog>(
+            field is null ? "New field" : $"Edit \"{field.Label}\"", parameters, options);
+        if (await dialog.Result is { Canceled: false })
         {
-            return;
-        }
-
-        errorMessage = null;
-        saving = true;
-        try
-        {
-            var request = new SaveEntryFieldRequest
-            {
-                FieldKey = editing.FieldKey,
-                Label = editing.Label,
-                DataType = editing.DataType,
-                IsRequired = editing.IsRequired,
-                SortOrder = editing.SortOrder,
-                IsActive = editing.IsActive,
-                OrganizationRoleId = editing.OrganizationRoleId,
-                Options = editing.Options
-                    .Where(o => !string.IsNullOrWhiteSpace(o.Value))
-                    .Select((o, i) => new EntryFieldOptionInput(o.Value, o.Label, i + 1))
-                    .ToList(),
-            };
-
-            var result = editing.Id == 0
-                ? await Api.CreateFieldAsync(selectedOrgId, request)
-                : await Api.UpdateFieldAsync(selectedOrgId, editing.Id, request);
-
-            if (result.Success)
-            {
-                Snackbar.Add(editing.Id == 0 ? "Field added" : "Field updated", Severity.Success);
-                CancelEdit();
-                await LoadAsync();
-            }
-            else
-            {
-                errorMessage = result.Error;
-            }
-        }
-        finally
-        {
-            saving = false;
+            await GuardAsync(LoadAsync);
         }
     }
 
@@ -357,24 +206,5 @@ else
         var result = await Api.DeleteFieldAsync(selectedOrgId, f.Id);
         Snackbar.Add(result.Message, result.Deactivated ? Severity.Warning : Severity.Success);
         await LoadAsync();
-    }
-
-    private sealed class FieldEditModel
-    {
-        public int Id { get; set; }
-        public string FieldKey { get; set; } = string.Empty;
-        public string Label { get; set; } = string.Empty;
-        public FieldDataType DataType { get; set; } = FieldDataType.Text;
-        public bool IsRequired { get; set; }
-        public int SortOrder { get; set; }
-        public bool IsActive { get; set; } = true;
-        public int? OrganizationRoleId { get; set; }
-        public List<OptionEditModel> Options { get; set; } = new();
-    }
-
-    private sealed class OptionEditModel
-    {
-        public string Value { get; set; } = string.Empty;
-        public string Label { get; set; } = string.Empty;
     }
 }

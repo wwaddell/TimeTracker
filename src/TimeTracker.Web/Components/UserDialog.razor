@@ -1,0 +1,98 @@
+@using TimeTracker.Contracts.Admin
+@using TimeTracker.Contracts.Members
+@inject TimeTracker.Web.Services.TimeTrackerApi Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (Existing is null)
+        {
+            <MudTextField T="string" Label="Email" @bind-Value="email" Required="true"
+                          Variant="Variant.Outlined" Class="mb-3" />
+            <MudTextField T="string" Label="Display name (optional)" @bind-Value="displayName"
+                          Variant="Variant.Outlined" Class="mb-3" />
+        }
+        <MudSelect T="int" Label="Roles" MultiSelection="true" @bind-SelectedValues="selectedRoleIds"
+                   Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+            @foreach (var role in Roles)
+            {
+                <MudSelectItem T="int" Value="@role.Id">@role.Name</MudSelectItem>
+            }
+        </MudSelect>
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
+            @(saving ? "Saving…" : (Existing is null ? "Send invite" : "Save roles"))
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public int OrgId { get; set; }
+    [Parameter] public IReadOnlyList<OrganizationRoleDto> Roles { get; set; } = [];
+
+    /// <summary>The member being edited; null = invite a new user.</summary>
+    [Parameter] public MemberDto? Existing { get; set; }
+
+    private string email = string.Empty;
+    private string? displayName;
+    private IReadOnlyCollection<int> selectedRoleIds = new HashSet<int>();
+    private bool saving;
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is { } m)
+        {
+            selectedRoleIds = m.Roles.Select(r => r.Id).ToHashSet();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        error = null;
+        if (Existing is null && (string.IsNullOrWhiteSpace(email) || !email.Contains('@')))
+        {
+            error = "A valid email is required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var result = Existing is null
+                ? await Api.InviteMemberAsync(OrgId, new InviteMemberRequest
+                {
+                    Email = email,
+                    DisplayName = displayName,
+                    RoleIds = selectedRoleIds.ToList(),
+                })
+                : await Api.SetMemberRolesAsync(OrgId, Existing.UserId, new SetMemberRolesRequest
+                {
+                    RoleIds = selectedRoleIds.ToList(),
+                });
+
+            if (result.Success)
+            {
+                Snackbar.Add(Existing is null ? "Invitation sent" : "Roles updated", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                error = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

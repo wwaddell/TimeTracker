@@ -2,9 +2,11 @@
 @using TimeTracker.Contracts.Admin
 @using TimeTracker.Contracts.Members
 @using TimeTracker.Contracts.TimeEntries
+@using TimeTracker.Web.Components
 @using TimeTracker.Web.Services
 @inject TimeTrackerApi Api
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 @inject IJSRuntime JS
 
 <PageTitle>Users</PageTitle>
@@ -43,50 +45,9 @@ else
 
     <div class="d-flex justify-space-between align-center mb-3">
         <MudText Typo="Typo.h5">Members</MudText>
-        @if (!editorOpen)
-        {
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
-                       OnClick="StartInvite">Invite user</MudButton>
-        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+                   OnClick="OpenInvite">Invite user</MudButton>
     </div>
-
-    @if (editorOpen)
-    {
-        <MudCard Class="mb-4" Elevation="2">
-            <MudCardContent>
-                <MudText Typo="Typo.h6" Class="mb-2">@(isInvite ? "Invite user" : $"Edit roles — {editUserLabel}")</MudText>
-                @if (isInvite)
-                {
-                    <MudGrid>
-                        <MudItem xs="12" sm="6">
-                            <MudTextField T="string" Label="Email" @bind-Value="inviteEmail" Required="true" Variant="Variant.Outlined" />
-                        </MudItem>
-                        <MudItem xs="12" sm="6">
-                            <MudTextField T="string" Label="Display name (optional)" @bind-Value="inviteName" Variant="Variant.Outlined" />
-                        </MudItem>
-                    </MudGrid>
-                }
-                <MudSelect T="int" Label="Roles" MultiSelection="true" @bind-SelectedValues="selectedRoleIds"
-                           Variant="Variant.Outlined" Class="mt-3" AnchorOrigin="Origin.BottomCenter">
-                    @foreach (var role in roles ?? [])
-                    {
-                        <MudSelectItem T="int" Value="@role.Id">@role.Name</MudSelectItem>
-                    }
-                </MudSelect>
-                @if (errorMessage is not null)
-                {
-                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@errorMessage</MudAlert>
-                }
-            </MudCardContent>
-            <MudCardActions>
-                <MudSpacer />
-                <MudButton OnClick="CancelEdit">Cancel</MudButton>
-                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
-                    @(saving ? "Saving…" : (isInvite ? "Send invite" : "Save roles"))
-                </MudButton>
-            </MudCardActions>
-        </MudCard>
-    }
 
     @if (members is null)
     {
@@ -125,7 +86,7 @@ else
                 </MudTd>
                 <MudTd Style="text-align:right; white-space:nowrap">
                     <MudTooltip Text="Edit roles">
-                        <MudIconButton Icon="@Icons.Material.Filled.ManageAccounts" Size="Size.Small" OnClick="@(() => StartEditRoles(context))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.ManageAccounts" Size="Size.Small" OnClick="@(() => OpenEditRoles(context))" />
                     </MudTooltip>
                     <MudTooltip Text="Remove from org">
                         <MudIconButton Icon="@Icons.Material.Filled.PersonRemove" Color="Color.Error" Size="Size.Small" OnClick="@(() => RemoveAsync(context))" />
@@ -141,17 +102,6 @@ else
     private IReadOnlyList<MemberDto>? members;
     private IReadOnlyList<OrganizationRoleDto>? roles;
     private int selectedOrgId;
-
-    private bool editorOpen;
-    private bool isInvite;
-    private string inviteEmail = string.Empty;
-    private string? inviteName;
-    private int editUserId;
-    private string? editUserLabel;
-    private IReadOnlyCollection<int> selectedRoleIds = new HashSet<int>();
-
-    private bool saving;
-    private string? errorMessage;
     private string? loadError;
 
     protected override Task OnInitializedAsync() => ReloadAllAsync();
@@ -172,7 +122,6 @@ else
     private async Task OnOrgChanged(int orgId)
     {
         selectedOrgId = orgId;
-        CancelEdit();
         await GuardAsync(LoadAsync);
     }
 
@@ -182,76 +131,24 @@ else
         members = await Api.GetMembersAsync(selectedOrgId);
     }
 
-    private void StartInvite()
-    {
-        isInvite = true;
-        inviteEmail = string.Empty;
-        inviteName = null;
-        selectedRoleIds = new HashSet<int>();
-        errorMessage = null;
-        editorOpen = true;
-    }
+    private Task OpenInvite() => ShowUserDialogAsync(null);
 
-    private void StartEditRoles(MemberDto member)
-    {
-        isInvite = false;
-        editUserId = member.UserId;
-        editUserLabel = member.DisplayName;
-        selectedRoleIds = member.Roles.Select(r => r.Id).ToHashSet();
-        errorMessage = null;
-        editorOpen = true;
-    }
+    private Task OpenEditRoles(MemberDto member) => ShowUserDialogAsync(member);
 
-    private void CancelEdit()
+    private async Task ShowUserDialogAsync(MemberDto? member)
     {
-        editorOpen = false;
-        errorMessage = null;
-    }
-
-    private async Task SaveAsync()
-    {
-        errorMessage = null;
-        if (isInvite && (string.IsNullOrWhiteSpace(inviteEmail) || !inviteEmail.Contains('@')))
+        var parameters = new DialogParameters<UserDialog>
         {
-            errorMessage = "A valid email is required.";
-            return;
-        }
-
-        saving = true;
-        try
+            { x => x.OrgId, selectedOrgId },
+            { x => x.Roles, roles ?? [] },
+            { x => x.Existing, member },
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<UserDialog>(
+            member is null ? "Invite user" : $"Edit roles — {member.DisplayName}", parameters, options);
+        if (await dialog.Result is { Canceled: false })
         {
-            ApiResult result;
-            if (isInvite)
-            {
-                result = await Api.InviteMemberAsync(selectedOrgId, new InviteMemberRequest
-                {
-                    Email = inviteEmail,
-                    DisplayName = inviteName,
-                    RoleIds = selectedRoleIds.ToList(),
-                });
-            }
-            else
-            {
-                result = await Api.SetMemberRolesAsync(selectedOrgId, editUserId, new SetMemberRolesRequest
-                {
-                    RoleIds = selectedRoleIds.ToList(),
-                });
-            }
-
-            if (result.Success)
-            {
-                Snackbar.Add(isInvite ? "Invitation sent" : "Roles updated", Severity.Success);
-                CancelEdit();
-                await LoadAsync();
-            }
-            else
-            {
-                errorMessage = result.Error;
-            }
-        }
-        finally
-        {
-            saving = false;
+            await GuardAsync(LoadAsync);
         }
     }
 

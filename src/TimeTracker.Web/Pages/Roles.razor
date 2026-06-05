@@ -46,51 +46,9 @@ else
 
     <div class="d-flex justify-space-between align-center mb-3">
         <MudText Typo="Typo.h5">Roles</MudText>
-        @if (!showEditor)
-        {
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="NewRole">Add role</MudButton>
-        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddRole">Add role</MudButton>
     </div>
-
-    @if (showEditor && editing is not null)
-    {
-        <MudCard Class="mb-4" Elevation="2">
-            <MudCardContent>
-                <MudText Typo="Typo.h6" Class="mb-2">@(editing.Id == 0 ? "New role" : "Edit role")</MudText>
-                <MudGrid>
-                    <MudItem xs="12" sm="8">
-                        <MudTextField T="string" Label="Name" @bind-Value="editing.Name" Required="true" Variant="Variant.Outlined" />
-                    </MudItem>
-                    <MudItem xs="12" sm="4">
-                        <MudNumericField T="int" Label="Sort order" @bind-Value="editing.SortOrder" Variant="Variant.Outlined" />
-                    </MudItem>
-                </MudGrid>
-                <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1">Rights</MudText>
-                @foreach (var right in rights ?? [])
-                {
-                    <div>
-                        <MudCheckBox T="bool" Dense="true"
-                                     Value="@editing.Rights.Contains(right.Id)"
-                                     ValueChanged="@(v => ToggleRight(right.Id, v))">
-                            @right.Name <MudText Typo="Typo.caption" Class="mud-text-secondary d-inline">— @right.Description</MudText>
-                        </MudCheckBox>
-                    </div>
-                }
-                @if (errorMessage is not null)
-                {
-                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@errorMessage</MudAlert>
-                }
-            </MudCardContent>
-            <MudCardActions>
-                <MudSpacer />
-                <MudButton OnClick="CancelEdit">Cancel</MudButton>
-                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
-                    @(saving ? "Saving…" : "Save role")
-                </MudButton>
-            </MudCardActions>
-        </MudCard>
-    }
 
     @if (roles is null)
     {
@@ -128,7 +86,7 @@ else
                 <MudTd>@context.SortOrder</MudTd>
                 <MudTd Style="text-align:right; white-space:nowrap">
                     <MudTooltip Text="Edit">
-                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditRole(context))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenEditRole(context))" />
                     </MudTooltip>
                     <MudTooltip Text="Delete">
                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteAsync(context))" />
@@ -144,11 +102,6 @@ else
     private IReadOnlyList<RoleAdminDto>? roles;
     private IReadOnlyList<RightDto>? rights;
     private int selectedOrgId;
-
-    private RoleEditModel? editing;
-    private bool showEditor;
-    private bool saving;
-    private string? errorMessage;
     private string? loadError;
 
     protected override Task OnInitializedAsync() => ReloadAllAsync();
@@ -170,7 +123,6 @@ else
     private async Task OnOrgChanged(int orgId)
     {
         selectedOrgId = orgId;
-        CancelEdit();
         await GuardAsync(LoadAsync);
     }
 
@@ -179,78 +131,25 @@ else
     private string RightName(OrgRight right) =>
         rights?.FirstOrDefault(x => x.Id == right)?.Name ?? right.ToString();
 
-    private void NewRole()
+    private Task OpenAddRole() => ShowRoleDialogAsync(null);
+
+    private Task OpenEditRole(RoleAdminDto role) => ShowRoleDialogAsync(role);
+
+    private async Task ShowRoleDialogAsync(RoleAdminDto? role)
     {
         var nextSort = (roles is { Count: > 0 } ? roles.Max(r => r.SortOrder) : 0) + 1;
-        editing = new RoleEditModel { SortOrder = nextSort };
-        errorMessage = null;
-        showEditor = true;
-    }
-
-    private void EditRole(RoleAdminDto role)
-    {
-        editing = new RoleEditModel
+        var parameters = new DialogParameters<RoleDialog>
         {
-            Id = role.Id,
-            Name = role.Name,
-            SortOrder = role.SortOrder,
-            Rights = role.Rights.ToHashSet(),
+            { x => x.OrgId, selectedOrgId },
+            { x => x.Rights, rights ?? [] },
+            { x => x.Existing, role },
+            { x => x.NextSortOrder, nextSort },
         };
-        errorMessage = null;
-        showEditor = true;
-    }
-
-    private void CancelEdit()
-    {
-        showEditor = false;
-        editing = null;
-        errorMessage = null;
-    }
-
-    private void ToggleRight(OrgRight right, bool on)
-    {
-        if (editing is null) return;
-        if (on) editing.Rights.Add(right);
-        else editing.Rights.Remove(right);
-    }
-
-    private async Task SaveAsync()
-    {
-        if (editing is null) return;
-        errorMessage = null;
-        if (string.IsNullOrWhiteSpace(editing.Name))
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<RoleDialog>(role is null ? "New role" : "Edit role", parameters, options);
+        if (await dialog.Result is { Canceled: false })
         {
-            errorMessage = "Name is required.";
-            return;
-        }
-
-        saving = true;
-        try
-        {
-            var request = new SaveRoleRequest
-            {
-                Name = editing.Name,
-                SortOrder = editing.SortOrder,
-                Rights = editing.Rights.ToList(),
-            };
-            var result = editing.Id == 0
-                ? await Api.CreateRoleAsync(selectedOrgId, request)
-                : await Api.UpdateRoleAsync(selectedOrgId, editing.Id, request);
-
-            if (result.Success)
-            {
-                Snackbar.Add(editing.Id == 0 ? "Role added" : "Role updated", Severity.Success);
-                CancelEdit();
-                await LoadAsync();
-            }
-            else
-            {
-                errorMessage = result.Error;
-            }
-        }
-        finally
-        {
-            saving = false;
+            await GuardAsync(LoadAsync);
         }
     }
 
@@ -299,13 +198,5 @@ else
         {
             loadError = "Something went wrong loading roles. Please retry.";
         }
-    }
-
-    private sealed class RoleEditModel
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public int SortOrder { get; set; }
-        public HashSet<OrgRight> Rights { get; set; } = new();
     }
 }

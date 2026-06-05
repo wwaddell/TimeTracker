@@ -1,0 +1,117 @@
+@using TimeTracker.Contracts.Rights
+@using TimeTracker.Contracts.Roles
+@using TimeTracker.Domain.Enums
+@inject TimeTracker.Web.Services.TimeTrackerApi Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12" sm="8">
+                <MudTextField T="string" Label="Name" @bind-Value="name" Required="true" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudNumericField T="int" Label="Sort order" @bind-Value="sortOrder" Variant="Variant.Outlined" />
+            </MudItem>
+        </MudGrid>
+        <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1">Rights</MudText>
+        @foreach (var right in Rights)
+        {
+            <div>
+                <MudCheckBox T="bool" Dense="true"
+                             Value="@rights.Contains(right.Id)"
+                             ValueChanged="@(v => Toggle(right.Id, v))">
+                    @right.Name <MudText Typo="Typo.caption" Class="mud-text-secondary d-inline">— @right.Description</MudText>
+                </MudCheckBox>
+            </div>
+        }
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
+            @(saving ? "Saving…" : "Save role")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public int OrgId { get; set; }
+    [Parameter] public IReadOnlyList<RightDto> Rights { get; set; } = [];
+
+    /// <summary>The role being edited; null = create a new role.</summary>
+    [Parameter] public RoleAdminDto? Existing { get; set; }
+
+    /// <summary>Default sort order for a new role.</summary>
+    [Parameter] public int NextSortOrder { get; set; }
+
+    private string name = string.Empty;
+    private int sortOrder;
+    private HashSet<OrgRight> rights = new();
+    private bool saving;
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is { } r)
+        {
+            name = r.Name;
+            sortOrder = r.SortOrder;
+            rights = r.Rights.ToHashSet();
+        }
+        else
+        {
+            sortOrder = NextSortOrder;
+        }
+    }
+
+    private void Toggle(OrgRight right, bool on)
+    {
+        if (on) rights.Add(right);
+        else rights.Remove(right);
+    }
+
+    private async Task SaveAsync()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            error = "Name is required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var request = new SaveRoleRequest
+            {
+                Name = name,
+                SortOrder = sortOrder,
+                Rights = rights.ToList(),
+            };
+            var result = Existing is null
+                ? await Api.CreateRoleAsync(OrgId, request)
+                : await Api.UpdateRoleAsync(OrgId, Existing.Id, request);
+
+            if (result.Success)
+            {
+                Snackbar.Add(Existing is null ? "Role added" : "Role updated", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                error = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
