@@ -113,3 +113,122 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* Outlook-style tasks list — columnar first line + description that wraps the full row width. */
+.tt-tasks {
+    --tt-col-pri: 24px;
+    --tt-col-title: 220px;
+    --tt-col-assignee: 120px;
+    --tt-col-project: 140px;
+    --tt-col-due: 72px;
+    --tt-col-est: 56px;
+    --tt-col-progress: 140px;
+    --tt-col-actions: 124px;
+    --tt-col-gap: .5rem;
+    overflow: hidden;
+}
+
+.tt-tasks__head,
+.tt-tasks__line {
+    display: grid;
+    grid-template-columns:
+        var(--tt-col-pri) minmax(var(--tt-col-title), 1fr)
+        var(--tt-col-assignee) var(--tt-col-project)
+        var(--tt-col-due) var(--tt-col-est)
+        var(--tt-col-progress) var(--tt-col-actions);
+    column-gap: var(--tt-col-gap);
+    align-items: center;
+}
+
+.tt-tasks__head {
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--mud-palette-table-lines);
+    background: var(--mud-palette-table-striped);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-size: .72rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.tt-tasks__head .tt-col {
+    cursor: pointer;
+    user-select: none;
+}
+
+.tt-tasks__row {
+    padding: .45rem .75rem .6rem;
+    border-bottom: 1px solid var(--mud-palette-table-lines);
+}
+
+.tt-tasks__row:hover {
+    background: var(--mud-palette-action-default-hover);
+}
+
+.tt-tasks__row:last-child {
+    border-bottom: none;
+}
+
+.tt-tasks__preview {
+    /* Indent under the title column so the eye lines up under the bold title text;
+       wraps freely across the full remaining width of the row. */
+    margin-top: .2rem;
+    padding-left: calc(var(--tt-col-pri) + var(--tt-col-gap));
+    color: var(--mud-palette-text-secondary);
+    font-size: .85rem;
+    line-height: 1.35;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.tt-tasks__title {
+    /* Allow the title to truncate gracefully if a row gets tight — chips still sit beside it. */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tt-tasks__ellipsis {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tt-tasks__empty {
+    padding: 1rem;
+    text-align: center;
+}
+
+.tt-col {
+    min-width: 0; /* let cells shrink so ellipsis works */
+}
+
+.tt-col--pri      { width: var(--tt-col-pri); text-align: center; }
+.tt-col--assignee { width: var(--tt-col-assignee); }
+.tt-col--project  { width: var(--tt-col-project); }
+.tt-col--due      { width: var(--tt-col-due); }
+.tt-col--est      { width: var(--tt-col-est); }
+.tt-col--progress { width: var(--tt-col-progress); }
+.tt-col--actions  { width: var(--tt-col-actions); text-align: right; white-space: nowrap; }
+
+/* Only collapse on truly narrow viewports (phones). Tablet / preview-pane widths keep the full row. */
+@media (max-width: 600px) {
+    .tt-tasks__head,
+    .tt-tasks__line {
+        grid-template-columns: var(--tt-col-pri) minmax(0, 1fr) var(--tt-col-actions);
+    }
+    .tt-tasks__head .tt-col--assignee,
+    .tt-tasks__head .tt-col--project,
+    .tt-tasks__head .tt-col--due,
+    .tt-tasks__head .tt-col--est,
+    .tt-tasks__head .tt-col--progress { display: none; }
+    .tt-tasks__line .tt-col--assignee,
+    .tt-tasks__line .tt-col--project,
+    .tt-tasks__line .tt-col--due,
+    .tt-tasks__line .tt-col--est,
+    .tt-tasks__line .tt-col--progress {
+        grid-column: 2 / -1;
+    }
+}

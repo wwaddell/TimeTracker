@@ -86,112 +86,154 @@ else
     }
     else
     {
-        <MudTable Items="Filtered" Hover="true" Dense="true" Elevation="1">
-            <HeaderContent>
-                <MudTh Style="width:1px; text-align:center">
-                    <MudTableSortLabel T="TaskDto" SortBy="@(x => (int)(x.Priority ?? 0))">!</MudTableSortLabel>
-                </MudTh>
-                <MudTh>
-                    <MudTableSortLabel T="TaskDto" SortBy="@(x => x.Title)">Task</MudTableSortLabel>
-                </MudTh>
-                <MudTh Style="width:1px; white-space:nowrap">
-                    <MudTableSortLabel T="TaskDto" SortBy="@(x => x.DueDate ?? DateOnly.MaxValue)">Due</MudTableSortLabel>
-                </MudTh>
-                <MudTh Style="width:1px; white-space:nowrap">
-                    <MudTableSortLabel T="TaskDto" SortBy="@(x => x.EstimatedHours ?? -1m)">Est.</MudTableSortLabel>
-                </MudTh>
-                <MudTh Style="width:160px">
-                    <MudTableSortLabel T="TaskDto" SortBy="@(x => x.PercentComplete)">Progress</MudTableSortLabel>
-                </MudTh>
-                <MudTh Style="width:1px"></MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd Style="text-align:center">
-                    @if (context.Priority is { } p)
-                    {
-                        <MudTooltip Text="@($"{p} priority")">
-                            <MudIcon Icon="@PriorityIcon(p)" Color="@PriorityColor(p)" Size="Size.Small" />
-                        </MudTooltip>
-                    }
-                </MudTd>
-                <MudTd>
-                    <div class="d-flex align-center" style="gap:.4rem; flex-wrap:wrap">
-                        <MudText Typo="Typo.body1"
-                                 Style="@(context.IsComplete ? "text-decoration:line-through" : "")">
-                            <b>@context.Title</b>
-                        </MudText>
-                        @if (!string.IsNullOrWhiteSpace(context.ReferenceCode))
+        @* Outlook-style list: columnar first line, description wraps under the full row. *@
+        <MudPaper Elevation="1" Class="tt-tasks">
+            <div class="tt-tasks__head">
+                <div class="tt-col tt-col--pri">
+                    <MudLink Color="Color.Inherit" Typo="Typo.caption" Underline="Underline.None"
+                             OnClick="@(() => ToggleSort(SortKey.Priority))">
+                        <span class="d-inline-flex align-center" style="gap:.15rem">!@SortGlyph(SortKey.Priority)</span>
+                    </MudLink>
+                </div>
+                <div class="tt-col tt-col--title">
+                    <MudLink Color="Color.Inherit" Typo="Typo.caption" Underline="Underline.None"
+                             OnClick="@(() => ToggleSort(SortKey.Title))">Task@(SortGlyph(SortKey.Title))</MudLink>
+                </div>
+                <div class="tt-col tt-col--assignee">
+                    <MudLink Color="Color.Inherit" Typo="Typo.caption" Underline="Underline.None"
+                             OnClick="@(() => ToggleSort(SortKey.Assignee))">Assignee@(SortGlyph(SortKey.Assignee))</MudLink>
+                </div>
+                <div class="tt-col tt-col--project">
+                    <MudLink Color="Color.Inherit" Typo="Typo.caption" Underline="Underline.None"
+                             OnClick="@(() => ToggleSort(SortKey.Project))">Project@(SortGlyph(SortKey.Project))</MudLink>
+                </div>
+                <div class="tt-col tt-col--due">
+                    <MudLink Color="Color.Inherit" Typo="Typo.caption" Underline="Underline.None"
+                             OnClick="@(() => ToggleSort(SortKey.Due))">Due@(SortGlyph(SortKey.Due))</MudLink>
+                </div>
+                <div class="tt-col tt-col--est">
+                    <MudLink Color="Color.Inherit" Typo="Typo.caption" Underline="Underline.None"
+                             OnClick="@(() => ToggleSort(SortKey.Estimate))">Est.@(SortGlyph(SortKey.Estimate))</MudLink>
+                </div>
+                <div class="tt-col tt-col--progress">
+                    <MudLink Color="Color.Inherit" Typo="Typo.caption" Underline="Underline.None"
+                             OnClick="@(() => ToggleSort(SortKey.Progress))">Progress@(SortGlyph(SortKey.Progress))</MudLink>
+                </div>
+                <div class="tt-col tt-col--actions"></div>
+            </div>
+            @if (!Sorted.Any())
+            {
+                <div class="tt-tasks__empty">
+                    <MudText Class="mud-text-secondary">No tasks match the current search/filter.</MudText>
+                </div>
+            }
+            else
+            {
+                @foreach (var t in Sorted)
+                {
+                    <div class="tt-tasks__row" @key="t.Id">
+                        <div class="tt-tasks__line">
+                            <div class="tt-col tt-col--pri">
+                                @if (t.Priority is { } p)
+                                {
+                                    <MudTooltip Text="@($"{p} priority")">
+                                        <MudIcon Icon="@PriorityIcon(p)" Color="@PriorityColor(p)" Size="Size.Small" />
+                                    </MudTooltip>
+                                }
+                            </div>
+                            <div class="tt-col tt-col--title">
+                                <div class="d-flex align-center" style="gap:.4rem; flex-wrap:wrap; min-width:0">
+                                    <MudText Typo="Typo.body1" Class="tt-tasks__title"
+                                             Style="@(t.IsComplete ? "text-decoration:line-through" : "")">
+                                        <b>@t.Title</b>
+                                    </MudText>
+                                    @if (!string.IsNullOrWhiteSpace(t.ReferenceCode))
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@t.ReferenceCode</MudChip>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(t.ExternalUrl))
+                                    {
+                                        <MudTooltip Text="@t.ExternalUrl">
+                                            <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
+                                                           Href="@t.ExternalUrl" Target="_blank" />
+                                        </MudTooltip>
+                                    }
+                                </div>
+                            </div>
+                            <div class="tt-col tt-col--assignee">
+                                @if (me is not null && t.AssignedToUserId == me.Id)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Me</MudText>
+                                }
+                                else
+                                {
+                                    <MudTooltip Text="@($"Assigned to {t.AssignedToName}")">
+                                        <span class="d-inline-flex align-center" style="gap:.25rem; min-width:0">
+                                            <MudIcon Icon="@Icons.Material.Filled.PersonOutline" Size="Size.Small" Color="Color.Info" />
+                                            <MudText Typo="Typo.body2" Class="tt-tasks__ellipsis">@t.AssignedToName</MudText>
+                                        </span>
+                                    </MudTooltip>
+                                }
+                            </div>
+                            <div class="tt-col tt-col--project">
+                                @if (!string.IsNullOrWhiteSpace(t.ProjectName))
+                                {
+                                    <span class="d-inline-flex align-center" style="gap:.25rem; min-width:0">
+                                        <MudIcon Icon="@Icons.Material.Filled.Folder" Size="Size.Small" Color="Color.Primary" />
+                                        <MudText Typo="Typo.body2" Class="tt-tasks__ellipsis">@t.ProjectName</MudText>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">—</MudText>
+                                }
+                            </div>
+                            <div class="tt-col tt-col--due">
+                                @if (t.DueDate is { } d)
+                                {
+                                    <MudText Typo="Typo.body2" Color="@(IsOverdue(d, t.IsComplete) ? Color.Error : Color.Inherit)">
+                                        @d.ToString("MMM d")
+                                    </MudText>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">—</MudText>
+                                }
+                            </div>
+                            <div class="tt-col tt-col--est">
+                                <MudText Typo="Typo.body2">@(t.EstimatedHours is { } h ? $"{h:0.##} h" : "—")</MudText>
+                            </div>
+                            <div class="tt-col tt-col--progress">
+                                <div class="d-flex align-center" style="gap:.5rem">
+                                    <MudProgressLinear Color="Color.Primary" Rounded="true" Value="@t.PercentComplete"
+                                                       Style="height:8px; flex:1" />
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@t.PercentComplete%</MudText>
+                                </div>
+                            </div>
+                            <div class="tt-col tt-col--actions">
+                                <MudTooltip Text="Log time">
+                                    <MudIconButton Icon="@Icons.Material.Filled.MoreTime" Color="Color.Primary" Size="Size.Small"
+                                                   OnClick="@(() => LogTimeAsync(t))" />
+                                </MudTooltip>
+                                <MudTooltip Text="Edit">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                                   OnClick="@(() => OpenDialogAsync(t))" />
+                                </MudTooltip>
+                                <MudTooltip Text="Delete">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                                   OnClick="@(() => DeleteAsync(t))" />
+                                </MudTooltip>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(t.Description))
                         {
-                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@context.ReferenceCode</MudChip>
-                        }
-                        @if (!string.IsNullOrWhiteSpace(context.ExternalUrl))
-                        {
-                            <MudTooltip Text="@context.ExternalUrl">
-                                <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
-                                               Href="@context.ExternalUrl" Target="_blank" />
-                            </MudTooltip>
-                        }
-                        @if (me is not null && context.AssignedToUserId != me.Id)
-                        {
-                            <MudTooltip Text="@($"Assigned to {context.AssignedToName}")">
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info"
-                                         Icon="@Icons.Material.Filled.PersonOutline">@context.AssignedToName</MudChip>
-                            </MudTooltip>
+                            @* Wraps across the full row width, indented under the priority column to align with the title. *@
+                            <div class="tt-tasks__preview">@t.Description</div>
                         }
                     </div>
-                    @if (!string.IsNullOrWhiteSpace(context.ProjectName))
-                    {
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-flex align-center" Style="gap:.25rem">
-                            <MudIcon Icon="@Icons.Material.Filled.Folder" Size="Size.Small" Color="Color.Primary" />
-                            @context.ProjectName
-                        </MudText>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(context.Description))
-                    {
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Description</MudText>
-                    }
-                </MudTd>
-                <MudTd Style="white-space:nowrap">
-                    @if (context.DueDate is { } d)
-                    {
-                        <MudText Typo="Typo.body2" Color="@(IsOverdue(d, context.IsComplete) ? Color.Error : Color.Inherit)">
-                            @d.ToString("MMM d")
-                        </MudText>
-                    }
-                    else
-                    {
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">—</MudText>
-                    }
-                </MudTd>
-                <MudTd Style="white-space:nowrap">
-                    @(context.EstimatedHours is { } h ? $"{h:0.##} h" : "—")
-                </MudTd>
-                <MudTd>
-                    <div class="d-flex align-center" style="gap:.5rem">
-                        <MudProgressLinear Color="Color.Primary" Rounded="true" Value="@context.PercentComplete"
-                                           Style="height:8px; flex:1" />
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.PercentComplete%</MudText>
-                    </div>
-                </MudTd>
-                <MudTd Style="text-align:right; white-space:nowrap">
-                    <MudTooltip Text="Log time">
-                        <MudIconButton Icon="@Icons.Material.Filled.MoreTime" Color="Color.Primary" Size="Size.Small"
-                                       OnClick="@(() => LogTimeAsync(context))" />
-                    </MudTooltip>
-                    <MudTooltip Text="Edit">
-                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                                       OnClick="@(() => OpenDialogAsync(context))" />
-                    </MudTooltip>
-                    <MudTooltip Text="Delete">
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
-                                       OnClick="@(() => DeleteAsync(context))" />
-                    </MudTooltip>
-                </MudTd>
-            </RowTemplate>
-            <NoRecordsContent>
-                <MudText Class="mud-text-secondary">No tasks match the current search/filter.</MudText>
-            </NoRecordsContent>
-        </MudTable>
+                }
+            }
+        </MudPaper>
     }
 }
 
@@ -209,6 +251,28 @@ else
     private bool showAll; // false = active only (default)
     private string scope = "mine"; // "mine" | "assigned-by-me" | "all"
 
+    // Outlook-style list sort: click a header to toggle direction; clicking a new key resets to descending
+    // for priority/progress and ascending for everything else (matches what people usually want).
+    private enum SortKey { Priority, Title, Assignee, Project, Due, Estimate, Progress }
+    private SortKey sortKey = SortKey.Priority;
+    private bool sortDesc = true;
+
+    private void ToggleSort(SortKey key)
+    {
+        if (sortKey == key)
+        {
+            sortDesc = !sortDesc;
+        }
+        else
+        {
+            sortKey = key;
+            sortDesc = key is SortKey.Priority or SortKey.Progress or SortKey.Estimate;
+        }
+    }
+
+    private string SortGlyph(SortKey key) =>
+        sortKey == key ? (sortDesc ? " ▾" : " ▴") : string.Empty;
+
     private async Task OnScopeChanged(string value)
     {
         scope = value;
@@ -224,6 +288,41 @@ else
         .Where(t => string.IsNullOrWhiteSpace(search)
             || t.Title.Contains(search!, StringComparison.OrdinalIgnoreCase)
             || (t.Description?.Contains(search!, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    // Filtered + sorted by the current header. Completed tasks always sink to the bottom so the
+    // active work stays on top regardless of which column the user sorts by.
+    private IEnumerable<TaskDto> Sorted
+    {
+        get
+        {
+            var ordered = Filtered.OrderBy(t => t.IsComplete);
+            return sortKey switch
+            {
+                SortKey.Priority => sortDesc
+                    ? ordered.ThenByDescending(t => (int)(t.Priority ?? 0)).ThenByDescending(t => t.Id)
+                    : ordered.ThenBy(t => (int)(t.Priority ?? 0)).ThenByDescending(t => t.Id),
+                SortKey.Title => sortDesc
+                    ? ordered.ThenByDescending(t => t.Title)
+                    : ordered.ThenBy(t => t.Title),
+                SortKey.Assignee => sortDesc
+                    ? ordered.ThenByDescending(t => t.AssignedToName)
+                    : ordered.ThenBy(t => t.AssignedToName),
+                SortKey.Project => sortDesc
+                    ? ordered.ThenByDescending(t => t.ProjectName ?? "")
+                    : ordered.ThenBy(t => t.ProjectName ?? ""),
+                SortKey.Due => sortDesc
+                    ? ordered.ThenByDescending(t => t.DueDate ?? DateOnly.MinValue)
+                    : ordered.ThenBy(t => t.DueDate ?? DateOnly.MaxValue),
+                SortKey.Estimate => sortDesc
+                    ? ordered.ThenByDescending(t => t.EstimatedHours ?? -1m)
+                    : ordered.ThenBy(t => t.EstimatedHours ?? decimal.MaxValue),
+                SortKey.Progress => sortDesc
+                    ? ordered.ThenByDescending(t => t.PercentComplete)
+                    : ordered.ThenBy(t => t.PercentComplete),
+                _ => ordered,
+            };
+        }
+    }
 
     protected override Task OnInitializedAsync() => ReloadAllAsync();
 
