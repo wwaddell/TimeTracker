@@ -82,3 +82,9 @@ public record CalendarImportRequest
 
 /// <summary>Outcome of an import: how many entries were created vs. skipped as duplicates.</summary>
 public record CalendarImportResult(int Imported, int Skipped);
+
+/// <summary>Whether the user has linked Outlook, and whether the server is even configured for it.</summary>
+public record CalendarConnectionStatusDto(bool Connected, string? AccountEmail, bool Configured, DateTime? LastSyncUtc);
+
+/// <summary>A URL to send the browser to (OAuth sign-in or admin consent).</summary>
+public record ConnectUrlResponse(string Url);

@@ -1,5 +1,7 @@
 using System.Globalization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using TimeTracker.Api.Auth;
 using TimeTracker.Api.Calendar;
 using TimeTracker.Contracts.Calendar;
@@ -18,7 +20,7 @@ public static class CalendarEndpoints
         // Preview meetings to import for a date range. Any member may import their own calendar.
         api.MapPost("/api/organizations/{orgId:int}/calendar/preview", async (
             int orgId, CalendarPreviewRequest request, TimeTrackerDbContext db,
-            ICurrentUser currentUser, ICalendarSource graph, IWebHostEnvironment env) =>
+            ICurrentUser currentUser, ICalendarSource graph, ICalendarTokenProvider tokens, IWebHostEnvironment env) =>
         {
             var userId = await currentUser.GetUserIdAsync();
             if (!await IsMemberAsync(db, userId, orgId))
@@ -27,38 +29,54 @@ public static class CalendarEndpoints
             }
 
             var (fromUtc, toUtc) = ToUtcWindow(request.From, request.To);
+            var pasted = request.AccessToken?.Trim();
 
-            // In dev, a blank or "FAKE" token uses sample meetings so the flow is testable
-            // without an Entra app registration. Otherwise call Graph with the supplied token.
-            var token = request.AccessToken?.Trim();
-            var useSample = env.IsDevelopment()
-                && (string.IsNullOrEmpty(token) || token == DevCalendarSamples.Sentinel);
-
+            // Token source, in order: explicit "FAKE" sentinel → sample data; a pasted dev token →
+            // use directly; otherwise the user's stored Outlook connection; otherwise (dev) fall
+            // back to sample data, or prompt to connect.
             IReadOnlyList<CalendarEvent> events;
-            if (useSample)
+            var useSample = false;
+            try
             {
-                events = DevCalendarSamples.Build(fromUtc, toUtc);
+                string? token;
+                if (pasted == DevCalendarSamples.Sentinel)
+                {
+                    token = null;
+                    useSample = true;
+                }
+                else if (!string.IsNullOrEmpty(pasted))
+                {
+                    token = pasted;
+                }
+                else
+                {
+                    token = await tokens.GetAccessTokenAsync(userId);
+                    if (token is null)
+                    {
+                        if (env.IsDevelopment())
+                        {
+                            useSample = true;
+                        }
+                        else
+                        {
+                            return Results.ValidationProblem(new Dictionary<string, string[]>
+                            {
+                                ["accessToken"] = ["Connect Outlook to import meetings."],
+                            });
+                        }
+                    }
+                }
+
+                events = useSample
+                    ? DevCalendarSamples.Build(fromUtc, toUtc)
+                    : await graph.GetEventsAsync(token!, fromUtc, toUtc);
             }
-            else if (string.IsNullOrEmpty(token))
+            catch (CalendarSourceException ex)
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {
-                    ["accessToken"] = ["Connect Outlook (or paste a Graph access token) to import meetings."],
+                    ["accessToken"] = [ex.Message],
                 });
-            }
-            else
-            {
-                try
-                {
-                    events = await graph.GetEventsAsync(token, fromUtc, toUtc);
-                }
-                catch (CalendarSourceException ex)
-                {
-                    return Results.ValidationProblem(new Dictionary<string, string[]>
-                    {
-                        ["accessToken"] = [ex.Message],
-                    });
-                }
             }
 
             var uids = events.Select(e => e.SeriesUid).Distinct().ToList();
@@ -197,7 +215,139 @@ public static class CalendarEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(new CalendarImportResult(imported, skipped));
         });
+
+        // --- "Connect Outlook" OAuth (Phase 2) ---
+
+        // Connection status for the current user (+ whether the server is configured at all).
+        api.MapGet("/api/organizations/{orgId:int}/calendar/connection", async (
+            int orgId, TimeTrackerDbContext db, ICurrentUser currentUser,
+            ICalendarTokenProvider tokens, IOptions<GraphOptions> graphOptions) =>
+        {
+            var userId = await currentUser.GetUserIdAsync();
+            if (!await IsMemberAsync(db, userId, orgId))
+            {
+                return Results.Forbid();
+            }
+
+            var info = await tokens.GetConnectionAsync(userId);
+            return Results.Ok(new CalendarConnectionStatusDto(
+                info is not null, info?.AccountEmail, graphOptions.Value.IsConfigured, info?.LastSyncUtc));
+        });
+
+        // Build the sign-in URL; the client navigates the browser to it.
+        api.MapPost("/api/organizations/{orgId:int}/calendar/connect-url", async (
+            int orgId, HttpContext http, TimeTrackerDbContext db, ICurrentUser currentUser,
+            OutlookOAuthClient oauth, IOptions<GraphOptions> graphOptions, IDataProtectionProvider dp) =>
+        {
+            var userId = await currentUser.GetUserIdAsync();
+            if (!await IsMemberAsync(db, userId, orgId))
+            {
+                return Results.Forbid();
+            }
+            if (!graphOptions.Value.IsConfigured)
+            {
+                return NotConfigured();
+            }
+
+            var state = StateProtector(dp).Protect($"u:{userId}", TimeSpan.FromMinutes(10));
+            var url = oauth.BuildAuthorizeUrl(RedirectUri(graphOptions.Value, http), state);
+            return Results.Ok(new ConnectUrlResponse(url));
+        });
+
+        // Build the admin-consent URL (an org admin grants the app tenant-wide in one click).
+        api.MapGet("/api/organizations/{orgId:int}/calendar/admin-consent-url", async (
+            int orgId, HttpContext http, TimeTrackerDbContext db, ICurrentUser currentUser,
+            OutlookOAuthClient oauth, IOptions<GraphOptions> graphOptions, IDataProtectionProvider dp) =>
+        {
+            var userId = await currentUser.GetUserIdAsync();
+            if (!await IsMemberAsync(db, userId, orgId))
+            {
+                return Results.Forbid();
+            }
+            if (!graphOptions.Value.IsConfigured)
+            {
+                return NotConfigured();
+            }
+
+            var state = StateProtector(dp).Protect($"a:{userId}", TimeSpan.FromMinutes(30));
+            var url = oauth.BuildAdminConsentUrl(RedirectUri(graphOptions.Value, http), state);
+            return Results.Ok(new ConnectUrlResponse(url));
+        });
+
+        // Disconnect.
+        api.MapDelete("/api/organizations/{orgId:int}/calendar/connection", async (
+            int orgId, TimeTrackerDbContext db, ICurrentUser currentUser, ICalendarTokenProvider tokens) =>
+        {
+            var userId = await currentUser.GetUserIdAsync();
+            if (!await IsMemberAsync(db, userId, orgId))
+            {
+                return Results.Forbid();
+            }
+
+            await tokens.DeleteConnectionAsync(userId);
+            return Results.NoContent();
+        });
+
+        // OAuth redirect target — hit by the browser (no bearer); identity comes from the
+        // protected state, so this is intentionally anonymous.
+        app.MapGet("/api/calendar/callback", async (
+            HttpContext http, OutlookOAuthClient oauth, ICalendarTokenProvider tokens,
+            IOptions<GraphOptions> graphOptions, IDataProtectionProvider dp, IConfiguration config) =>
+        {
+            var webBase = (config["WebApp:BaseUrl"] ?? "http://localhost:5008").TrimEnd('/');
+            var q = http.Request.Query;
+
+            // Admin-consent return carries admin_consent rather than an auth code.
+            if (q.ContainsKey("admin_consent"))
+            {
+                var ok = string.Equals(q["admin_consent"], "True", StringComparison.OrdinalIgnoreCase);
+                return Results.Redirect($"{webBase}/import?adminConsent={(ok ? "ok" : "error")}");
+            }
+
+            if (q.ContainsKey("error"))
+            {
+                return Results.Redirect($"{webBase}/import?connected=error");
+            }
+
+            int userId;
+            try
+            {
+                var payload = StateProtector(dp).Unprotect(q["state"].ToString());
+                if (!payload.StartsWith("u:") || !int.TryParse(payload[2..], out userId))
+                {
+                    return Results.Redirect($"{webBase}/import?connected=error");
+                }
+            }
+            catch
+            {
+                return Results.Redirect($"{webBase}/import?connected=error");
+            }
+
+            try
+            {
+                var t = await oauth.RedeemCodeAsync(q["code"].ToString(), RedirectUri(graphOptions.Value, http));
+                await tokens.SaveConnectionAsync(userId, t);
+                return Results.Redirect($"{webBase}/import?connected=ok");
+            }
+            catch (CalendarSourceException)
+            {
+                return Results.Redirect($"{webBase}/import?connected=error");
+            }
+        }).AllowAnonymous();
     }
+
+    private static ITimeLimitedDataProtector StateProtector(IDataProtectionProvider dp) =>
+        dp.CreateProtector("TimeTracker.Calendar.OAuthState").ToTimeLimitedDataProtector();
+
+    private static string RedirectUri(GraphOptions o, HttpContext http) =>
+        !string.IsNullOrWhiteSpace(o.RedirectUri)
+            ? o.RedirectUri
+            : $"{http.Request.Scheme}://{http.Request.Host}/api/calendar/callback";
+
+    private static IResult NotConfigured() => Results.ValidationProblem(new Dictionary<string, string[]>
+    {
+        ["graph"] = ["Outlook isn't set up on the server yet (no Entra app registration). Add Graph:ClientId/ClientSecret."],
+    });
 
     // Remember (or update) the task/field values for a meeting series so future occurrences
     // can be auto-tagged.

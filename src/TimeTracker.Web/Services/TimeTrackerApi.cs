@@ -137,6 +137,19 @@ public class TimeTrackerApi(HttpClient http)
         await PostAsync<CalendarImportResult>($"/api/organizations/{orgId}/calendar/import", request)
         ?? new CalendarImportResult(0, 0);
 
+    public async Task<CalendarConnectionStatusDto> GetCalendarConnectionAsync(int orgId) =>
+        await GetAsync<CalendarConnectionStatusDto>($"/api/organizations/{orgId}/calendar/connection")
+        ?? new CalendarConnectionStatusDto(false, null, false, null);
+
+    public async Task<ConnectUrlResponse?> GetCalendarConnectUrlAsync(int orgId) =>
+        await PostAsync<ConnectUrlResponse>($"/api/organizations/{orgId}/calendar/connect-url", new { });
+
+    public async Task<ConnectUrlResponse?> GetCalendarAdminConsentUrlAsync(int orgId) =>
+        await GetAsync<ConnectUrlResponse>($"/api/organizations/{orgId}/calendar/admin-consent-url");
+
+    public async Task<ApiResult> DisconnectCalendarAsync(int orgId) =>
+        await SendAsync(() => http.DeleteAsync($"/api/organizations/{orgId}/calendar/connection"));
+
     // --- Plumbing ---
 
     private async Task<T?> GetAsync<T>(string url)

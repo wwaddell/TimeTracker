@@ -21,6 +21,13 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddHttpClient<ICalendarSource, GraphCalendarSource>(client =>
     client.BaseAddress = new Uri("https://graph.microsoft.com/v1.0/"));
 
+// "Connect Outlook" OAuth: app registration settings, the token client, and the per-user
+// token provider. Data Protection encrypts refresh tokens at rest + protects OAuth state.
+builder.Services.Configure<GraphOptions>(builder.Configuration.GetSection(GraphOptions.SectionName));
+builder.Services.AddDataProtection();
+builder.Services.AddHttpClient<OutlookOAuthClient>();
+builder.Services.AddScoped<ICalendarTokenProvider, CalendarTokenProvider>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(WebCorsPolicy, policy =>

@@ -5,6 +5,7 @@
 @using TimeTracker.Web.Services
 @inject TimeTrackerApi Api
 @inject ISnackbar Snackbar
+@inject NavigationManager Nav
 
 @if (loadError is not null)
 {
@@ -34,6 +35,50 @@ else
     <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
         Pull calendar meetings into your time log. Recurring meetings you tag are remembered for next time.
     </MudText>
+
+    @if (connection is not null)
+    {
+        <MudPaper Class="pa-3 mb-4" Outlined="true">
+            @if (connection.Connected)
+            {
+                <div class="d-flex align-center justify-space-between flex-wrap" style="gap:1rem">
+                    <div class="d-flex align-center" style="gap:.5rem">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" />
+                        <MudText Typo="Typo.body2">
+                            Connected to Outlook@(string.IsNullOrWhiteSpace(connection.AccountEmail) ? "" : $" as {connection.AccountEmail}")
+                        </MudText>
+                    </div>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.LinkOff" OnClick="DisconnectAsync">Disconnect</MudButton>
+                </div>
+            }
+            else if (connection.Configured)
+            {
+                <div class="d-flex align-center justify-space-between flex-wrap" style="gap:1rem">
+                    <div class="d-flex align-center" style="gap:.5rem">
+                        <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" />
+                        <MudText Typo="Typo.body2">Connect your Outlook calendar to import your meetings.</MudText>
+                    </div>
+                    <div class="d-flex align-center flex-wrap" style="gap:.5rem">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Link"
+                                   OnClick="ConnectAsync" Disabled="connecting">Connect Outlook</MudButton>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.AdminPanelSettings"
+                                   OnClick="RequestAdminConsentAsync">Request admin consent</MudButton>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="d-flex align-center" style="gap:.5rem">
+                    <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Info" />
+                    <MudText Typo="Typo.body2">
+                        Outlook isn't set up on the server yet — showing <b>sample</b> meetings.
+                        Paste a Graph token below to read your real calendar in the meantime.
+                    </MudText>
+                </div>
+            }
+        </MudPaper>
+    }
 
     <MudPaper Class="pa-4 mb-4" Outlined="true">
         <MudGrid>
@@ -188,12 +233,18 @@ else
 
     private bool fetching;
     private bool importing;
+    private bool connecting;
     private bool usingSampleData;
     private List<Row>? rows;
+    private CalendarConnectionStatusDto? connection;
 
     private int SelectedCount => rows?.Count(r => r.Selected && !r.Meeting.AlreadyImported) ?? 0;
 
-    protected override Task OnInitializedAsync() => ReloadAllAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAllAsync();
+        HandleReturnParams();
+    }
 
     private Task ReloadAllAsync() => GuardAsync(async () =>
     {
@@ -205,6 +256,7 @@ else
                 selectedOrgId = organizations[0].Id;
             }
             tasks = await Api.GetTasksAsync(selectedOrgId);
+            connection = await Api.GetCalendarConnectionAsync(selectedOrgId);
         }
     });
 
@@ -213,7 +265,103 @@ else
         selectedOrgId = orgId;
         rows = null;
         usingSampleData = false;
-        await GuardAsync(async () => tasks = await Api.GetTasksAsync(selectedOrgId));
+        await GuardAsync(async () =>
+        {
+            tasks = await Api.GetTasksAsync(selectedOrgId);
+            connection = await Api.GetCalendarConnectionAsync(selectedOrgId);
+        });
+    }
+
+    private async Task ConnectAsync()
+    {
+        connecting = true;
+        try
+        {
+            var resp = await Api.GetCalendarConnectUrlAsync(selectedOrgId);
+            if (resp is not null)
+            {
+                Nav.NavigateTo(resp.Url, forceLoad: true); // hand off to Microsoft sign-in
+            }
+        }
+        catch (ApiException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            connecting = false;
+        }
+    }
+
+    private async Task RequestAdminConsentAsync()
+    {
+        try
+        {
+            var resp = await Api.GetCalendarAdminConsentUrlAsync(selectedOrgId);
+            if (resp is not null)
+            {
+                Nav.NavigateTo(resp.Url, forceLoad: true);
+            }
+        }
+        catch (ApiException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task DisconnectAsync()
+    {
+        var result = await Api.DisconnectCalendarAsync(selectedOrgId);
+        if (result.Success)
+        {
+            Snackbar.Add("Outlook disconnected.", Severity.Success);
+            connection = await Api.GetCalendarConnectionAsync(selectedOrgId);
+        }
+        else
+        {
+            Snackbar.Add(result.Error ?? "Couldn't disconnect.", Severity.Error);
+        }
+    }
+
+    // Surface the OAuth callback outcome (?connected / ?adminConsent), then strip the query.
+    private void HandleReturnParams()
+    {
+        var query = new Uri(Nav.Uri).Query;
+        if (string.IsNullOrEmpty(query))
+        {
+            return;
+        }
+
+        var q = QueryValues(query);
+        var handled = false;
+        if (q.TryGetValue("connected", out var c))
+        {
+            Snackbar.Add(c == "ok" ? "Outlook connected." : "Couldn't connect Outlook.",
+                c == "ok" ? Severity.Success : Severity.Error);
+            handled = true;
+        }
+        if (q.TryGetValue("adminConsent", out var a))
+        {
+            Snackbar.Add(a == "ok" ? "Admin consent granted — users can now connect." : "Admin consent was not granted.",
+                a == "ok" ? Severity.Success : Severity.Error);
+            handled = true;
+        }
+
+        if (handled)
+        {
+            Nav.NavigateTo("import", replace: true); // drop the query params
+        }
+    }
+
+    private static Dictionary<string, string> QueryValues(string query)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = pair.Split('=', 2);
+            result[Uri.UnescapeDataString(kv[0])] = kv.Length > 1 ? Uri.UnescapeDataString(kv[1]) : "";
+        }
+        return result;
     }
 
     private async Task FetchAsync()

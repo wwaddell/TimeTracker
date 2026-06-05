@@ -26,6 +26,7 @@ public class TimeTrackerDbContext(DbContextOptions<TimeTrackerDbContext> options
     public DbSet<FieldDataTypeLookup> FieldDataTypes => Set<FieldDataTypeLookup>();
     public DbSet<CalendarSeriesTag> CalendarSeriesTags => Set<CalendarSeriesTag>();
     public DbSet<CalendarSeriesTagAttribute> CalendarSeriesTagAttributes => Set<CalendarSeriesTagAttribute>();
+    public DbSet<CalendarConnection> CalendarConnections => Set<CalendarConnection>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
