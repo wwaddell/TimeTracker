@@ -15,6 +15,9 @@ public interface ICurrentUser
     /// <summary>Whether the caller holds the dev/global admin role claim (backdoor ⇒ all rights).</summary>
     bool IsAdmin { get; }
 
+    /// <summary>Platform admin: the dev/admin claim, or the user's persisted IsGlobalAdmin flag.</summary>
+    Task<bool> IsGlobalAdminAsync();
+
     /// <summary>Ids of the roles the current user holds in the given org.</summary>
     Task<IReadOnlyList<int>> GetRoleIdsAsync(int orgId);
 
@@ -30,6 +33,18 @@ public sealed class CurrentUser(IHttpContextAccessor accessor, TimeTrackerDbCont
         accessor.HttpContext?.User ?? throw new InvalidOperationException("No authenticated context.");
 
     public bool IsAdmin => Principal.IsInRole("admin");
+
+    public async Task<bool> IsGlobalAdminAsync()
+    {
+        // Dev backdoor / admin claim ⇒ platform admin; otherwise the persisted user flag.
+        if (IsAdmin)
+        {
+            return true;
+        }
+
+        var id = await GetUserIdAsync();
+        return await db.Users.Where(u => u.Id == id).Select(u => u.IsGlobalAdmin).FirstOrDefaultAsync();
+    }
 
     public async Task<int> GetUserIdAsync()
     {

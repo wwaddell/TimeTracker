@@ -116,5 +116,6 @@ app.MapOrganizationEndpoints();
 app.MapMemberEndpoints();
 app.MapRoleEndpoints();
 app.MapCalendarEndpoints();
+app.MapGlobalAdminEndpoints();
 
 app.Run();

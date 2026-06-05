@@ -18,5 +18,8 @@ public class User : AuditableEntity
     public string Email { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
 
+    /// <summary>Platform-level administrator: can create/manage organizations and assign their admins.</summary>
+    public bool IsGlobalAdmin { get; set; }
+
     public ICollection<UserOrganization> Organizations { get; set; } = new List<UserOrganization>();
 }

@@ -1,0 +1,124 @@
+@page "/admin/organizations"
+@using TimeTracker.Contracts.Admin
+@using TimeTracker.Web.Components
+@using TimeTracker.Web.Services
+@inject TimeTrackerApi Api
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Organizations</PageTitle>
+
+@if (loadError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <div class="d-flex align-center justify-space-between" style="gap:1rem">
+            <span>@loadError</span>
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Retry</MudButton>
+        </div>
+    </MudAlert>
+}
+
+<div class="d-flex justify-space-between align-center mb-1">
+    <MudText Typo="Typo.h5">Organizations</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="@(() => OpenOrgDialogAsync(null))">New organization</MudButton>
+</div>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Platform administration — create organizations and assign their administrators.
+</MudText>
+
+@if (orgs is null)
+{
+    @if (loadError is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+}
+else if (orgs.Count == 0)
+{
+    <MudText Class="mud-text-secondary">No organizations yet. Create one to get started.</MudText>
+}
+else
+{
+    <MudTable Items="orgs" Hover="true" Dense="true" Elevation="1">
+        <HeaderContent>
+            <MudTh>Name</MudTh>
+            <MudTh>Description</MudTh>
+            <MudTh Style="width:1px; white-space:nowrap">Active</MudTh>
+            <MudTh Style="width:1px; white-space:nowrap">Members</MudTh>
+            <MudTh Style="width:1px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><b>@context.Name</b></MudTd>
+            <MudTd>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Description</MudText>
+            </MudTd>
+            <MudTd Style="text-align:center">
+                @if (context.IsActive)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                }
+                else
+                {
+                    <MudTooltip Text="Inactive"><MudIcon Icon="@Icons.Material.Filled.Block" Color="Color.Default" Size="Size.Small" /></MudTooltip>
+                }
+            </MudTd>
+            <MudTd Style="text-align:center">@context.MemberCount</MudTd>
+            <MudTd Style="text-align:right; white-space:nowrap">
+                <MudTooltip Text="Manage admins">
+                    <MudIconButton Icon="@Icons.Material.Filled.AdminPanelSettings" Size="Size.Small"
+                                   OnClick="@(() => OpenAdminsDialogAsync(context))" />
+                </MudTooltip>
+                <MudTooltip Text="Edit">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                   OnClick="@(() => OpenOrgDialogAsync(context))" />
+                </MudTooltip>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private IReadOnlyList<AdminOrgDto>? orgs;
+    private string? loadError;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            loadError = null;
+            orgs = await Api.GetAllOrganizationsAsync();
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex.Message;
+        }
+        catch (Exception)
+        {
+            loadError = "Something went wrong loading organizations. Please retry.";
+        }
+    }
+
+    private async Task OpenOrgDialogAsync(AdminOrgDto? org)
+    {
+        var parameters = new DialogParameters<OrgDialog> { { x => x.Existing, org } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<OrgDialog>(org is null ? "New organization" : "Edit organization", parameters, options);
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task OpenAdminsDialogAsync(AdminOrgDto org)
+    {
+        var parameters = new DialogParameters<OrgAdminsDialog> { { x => x.OrgId, org.Id } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<OrgAdminsDialog>($"Admins — {org.Name}", parameters, options);
+        await dialog.Result;
+        await LoadAsync(); // member counts may have changed
+    }
+}

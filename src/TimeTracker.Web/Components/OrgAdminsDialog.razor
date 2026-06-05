@@ -1,0 +1,132 @@
+@using TimeTracker.Contracts.Admin
+@inject TimeTracker.Web.Services.TimeTrackerApi Api
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle2" Class="mb-1">Administrators</MudText>
+        @if (admins is null)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (admins.Count == 0)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">No administrators yet.</MudText>
+        }
+        else
+        {
+            <MudList T="string" Dense="true">
+                @foreach (var a in admins)
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.Person">
+                        <div class="d-flex justify-space-between align-center" style="gap:1rem">
+                            <div>
+                                <MudText Typo="Typo.body2">
+                                    <b>@a.DisplayName</b>
+                                    @if (a.IsPending)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">Pending</MudChip>
+                                    }
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@a.Email</MudText>
+                            </div>
+                            <MudTooltip Text="Remove admin">
+                                <MudIconButton Icon="@Icons.Material.Filled.PersonRemove" Color="Color.Error" Size="Size.Small"
+                                               OnClick="@(() => RemoveAsync(a))" />
+                            </MudTooltip>
+                        </div>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+
+        <MudDivider Class="my-3" />
+        <MudText Typo="Typo.subtitle2" Class="mb-2">Add administrator</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="7">
+                <MudTextField T="string" Label="Email" @bind-Value="email" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="5">
+                <MudTextField T="string" Label="Display name (optional)" @bind-Value="displayName"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+        </MudGrid>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+                   Class="mt-2" OnClick="AddAsync" Disabled="saving">
+            @(saving ? "Adding…" : "Add admin")
+        </MudButton>
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Close())">Done</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public int OrgId { get; set; }
+
+    private IReadOnlyList<OrgAdminDto>? admins;
+    private string email = string.Empty;
+    private string? displayName;
+    private bool saving;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => admins = await Api.GetOrgAdminsAsync(OrgId);
+
+    private async Task AddAsync()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+        {
+            error = "A valid email is required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var result = await Api.AssignOrgAdminAsync(OrgId, new AssignOrgAdminRequest { Email = email, DisplayName = displayName });
+            if (result.Success)
+            {
+                Snackbar.Add("Administrator assigned", Severity.Success);
+                email = string.Empty;
+                displayName = null;
+                await LoadAsync();
+            }
+            else
+            {
+                error = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task RemoveAsync(OrgAdminDto admin)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Remove {admin.DisplayName} as an administrator?"))
+        {
+            return;
+        }
+
+        var result = await Api.RemoveOrgAdminAsync(OrgId, admin.UserId);
+        if (result.Success)
+        {
+            Snackbar.Add("Administrator removed", Severity.Success);
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Add(result.Error ?? "Could not remove the administrator.", Severity.Error);
+        }
+    }
+}

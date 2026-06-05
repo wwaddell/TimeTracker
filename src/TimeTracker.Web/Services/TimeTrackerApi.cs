@@ -127,6 +127,26 @@ public class TimeTrackerApi(HttpClient http)
     public async Task<ApiResult> DeleteRoleAsync(int orgId, int roleId) =>
         await SendAsync(() => http.DeleteAsync($"/api/organizations/{orgId}/roles/{roleId}"));
 
+    // --- Global admin: organization management ---
+
+    public async Task<IReadOnlyList<AdminOrgDto>> GetAllOrganizationsAsync() =>
+        await GetAsync<List<AdminOrgDto>>("/api/admin/organizations") ?? [];
+
+    public async Task<ApiResult> CreateOrganizationAsync(CreateOrganizationRequest request) =>
+        await SendAsync(() => http.PostAsJsonAsync("/api/admin/organizations", request));
+
+    public async Task<ApiResult> UpdateOrganizationAsync(int orgId, UpdateOrganizationRequest request) =>
+        await SendAsync(() => http.PutAsJsonAsync($"/api/admin/organizations/{orgId}", request));
+
+    public async Task<IReadOnlyList<OrgAdminDto>> GetOrgAdminsAsync(int orgId) =>
+        await GetAsync<List<OrgAdminDto>>($"/api/admin/organizations/{orgId}/admins") ?? [];
+
+    public async Task<ApiResult> AssignOrgAdminAsync(int orgId, AssignOrgAdminRequest request) =>
+        await SendAsync(() => http.PostAsJsonAsync($"/api/admin/organizations/{orgId}/admins", request));
+
+    public async Task<ApiResult> RemoveOrgAdminAsync(int orgId, int userId) =>
+        await SendAsync(() => http.DeleteAsync($"/api/admin/organizations/{orgId}/admins/{userId}"));
+
     // --- Calendar import (Outlook via Graph) ---
 
     public async Task<CalendarPreviewResult> PreviewCalendarAsync(int orgId, CalendarPreviewRequest request) =>

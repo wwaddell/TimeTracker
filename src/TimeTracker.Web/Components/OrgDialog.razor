@@ -1,0 +1,88 @@
+@using TimeTracker.Contracts.Admin
+@inject TimeTracker.Web.Services.TimeTrackerApi Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string" Label="Name" @bind-Value="name" Required="true"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField T="string" Label="Description" @bind-Value="description" Lines="2"
+                      AutoGrow="true" MaxLines="6" Variant="Variant.Outlined" Class="mb-3" />
+        @if (Existing is not null)
+        {
+            <MudSwitch T="bool" @bind-Value="isActive" Color="Color.Primary" Label="Active" />
+        }
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
+            @(saving ? "Saving…" : "Save organization")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The org being edited; null = create a new org.</summary>
+    [Parameter] public AdminOrgDto? Existing { get; set; }
+
+    private string name = string.Empty;
+    private string? description;
+    private bool isActive = true;
+    private bool saving;
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is { } o)
+        {
+            name = o.Name;
+            description = o.Description;
+            isActive = o.IsActive;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            error = "An organization name is required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var result = Existing is null
+                ? await Api.CreateOrganizationAsync(new CreateOrganizationRequest { Name = name, Description = description })
+                : await Api.UpdateOrganizationAsync(Existing.Id, new UpdateOrganizationRequest
+                {
+                    Name = name,
+                    Description = description,
+                    IsActive = isActive,
+                });
+
+            if (result.Success)
+            {
+                Snackbar.Add(Existing is null ? "Organization created" : "Organization updated", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                error = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
