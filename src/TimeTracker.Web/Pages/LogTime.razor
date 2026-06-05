@@ -84,14 +84,15 @@ else
             @foreach (var entry in entries)
             {
                 var missing = MissingLabels(entry);
-                <MudPaper Class="pa-3" Elevation="1" Style="cursor:pointer"
+                var attrs = entry.Attributes.Where(a => !string.IsNullOrWhiteSpace(a.Value) && a.Value != "false").ToList();
+                <MudPaper Class="pa-4" Outlined="true" Style="cursor:pointer"
                           @onclick="@(() => OpenEdit(entry))">
-                    <div class="d-flex justify-space-between align-center">
-                        <MudText Typo="Typo.subtitle1"><b>@entry.Note</b></MudText>
+                    <div class="d-flex justify-space-between" style="gap:1rem">
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600; word-break:break-word">@entry.Note</MudText>
                         <div class="d-flex align-center flex-none" style="gap:.25rem">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="white-space:nowrap">
                                 @entry.EntryDate.ToString("yyyy-MM-dd")
-                                @(OrgRequiresTime && entry.StartTime is { } t ? t.ToString("HH:mm") : "")
+                                @(OrgRequiresTime && entry.StartTime is { } t ? "· " + t.ToString("HH:mm") : "")
                                 @(entry.DurationMinutes is { } d ? $"· {d} min" : "")
                             </MudText>
                             @if (missing.Count > 0)
@@ -110,16 +111,25 @@ else
                             }
                         </div>
                     </div>
-                    @if (entry.TaskTitle is not null || entry.Attributes.Any(a => !string.IsNullOrWhiteSpace(a.Value)))
+                    @if (entry.TaskTitle is not null || attrs.Count > 0)
                     {
-                        <MudChipSet T="string" Class="mt-1" ReadOnly="true">
+                        <MudChipSet T="string" Class="mt-2" ReadOnly="true">
                             @if (entry.TaskTitle is not null)
                             {
-                                <MudChip T="string" Color="Color.Info" Size="Size.Small">Task: @entry.TaskTitle</MudChip>
+                                <MudChip T="string" Variant="Variant.Filled" Color="Color.Info" Size="Size.Small"
+                                         Icon="@Icons.Material.Filled.Assignment">@entry.TaskTitle</MudChip>
                             }
-                            @foreach (var attr in entry.Attributes.Where(a => !string.IsNullOrWhiteSpace(a.Value)))
+                            @foreach (var attr in attrs)
                             {
-                                <MudChip T="string" Size="Size.Small">@attr.Label: @attr.Value</MudChip>
+                                @if (attr.Value == "true")
+                                {
+                                    <MudChip T="string" Variant="Variant.Outlined" Color="Color.Success" Size="Size.Small"
+                                             Icon="@Icons.Material.Filled.Check">@attr.Label</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Variant="Variant.Outlined" Size="Size.Small">@attr.Label: @attr.Value</MudChip>
+                                }
                             }
                         </MudChipSet>
                     }
