@@ -231,7 +231,9 @@ public static class CalendarEndpoints
                 db.TimeEntries.Add(entry);
                 imported++;
 
-                if (m.ApplyToSeries)
+                // Remember the applied project/details for a recurring meeting so a future
+                // occurrence of the same series inherits them automatically (no series-wide import).
+                if (m.IsRecurring && m.Attributes.Any(kv => !string.IsNullOrWhiteSpace(kv.Value)))
                 {
                     UpsertSeriesTag(db, tags, orgId, userId, m, validFieldIds);
                 }

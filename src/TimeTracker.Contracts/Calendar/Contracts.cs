@@ -69,9 +69,6 @@ public record ImportMeetingRequest
 
     public int? TaskId { get; init; }
     public Dictionary<int, string?> Attributes { get; init; } = new();
-
-    /// <summary>Remember this task/attributes for the whole series and auto-apply to future imports.</summary>
-    public bool ApplyToSeries { get; init; }
 }
 
 /// <summary>Batch import request.</summary>

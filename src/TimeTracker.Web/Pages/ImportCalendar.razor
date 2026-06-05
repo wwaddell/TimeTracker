@@ -156,7 +156,6 @@ else
                     <MudTh>Meeting</MudTh>
                     <MudTh Style="width:1px; white-space:nowrap">When</MudTh>
                     <MudTh Style="width:220px">Project</MudTh>
-                    <MudTh Style="width:1px; white-space:nowrap">Whole series</MudTh>
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd>
@@ -220,15 +219,6 @@ else
                                               Variant="Variant.Outlined" Placeholder="@projectField.Label" DebounceInterval="400"
                                               ValueChanged="@(v => OnProjectChanged(context, v))" />
                             }
-                        }
-                    </MudTd>
-                    <MudTd Style="white-space:nowrap">
-                        @if (context.Meeting.IsRecurring && !context.Meeting.AlreadyImported)
-                        {
-                            <MudTooltip Text="Remember this project for the whole meeting series and future imports">
-                                <MudSwitch T="bool" Value="@context.ApplyToSeries" Color="Color.Primary" Dense="true"
-                                           ValueChanged="@(v => OnApplyToSeriesChanged(context, v))" />
-                            </MudTooltip>
                         }
                     </MudTd>
                 </RowTemplate>
@@ -486,7 +476,6 @@ else
                     IsRecurring = r.Meeting.IsRecurring,
                     // Carry remembered field values, with the chosen Project applied on top.
                     Attributes = BuildAttributes(r),
-                    ApplyToSeries = r.ApplyToSeries,
                 }).ToList(),
             };
 
@@ -527,41 +516,7 @@ else
         return attrs;
     }
 
-    // When a recurring meeting's project is set with "whole series" on, propagate to its siblings
-    // visible in this list so the whole series imports consistently.
-    private void OnProjectChanged(Row row, string? value)
-    {
-        row.ProjectValue = value;
-        if (row.ApplyToSeries)
-        {
-            PropagateToSeries(row);
-        }
-    }
-
-    private void OnApplyToSeriesChanged(Row row, bool value)
-    {
-        row.ApplyToSeries = value;
-        if (value)
-        {
-            PropagateToSeries(row);
-        }
-    }
-
-    private void PropagateToSeries(Row row)
-    {
-        if (rows is null)
-        {
-            return;
-        }
-
-        foreach (var sibling in rows.Where(r =>
-            r != row && r.Meeting.SeriesUid == row.Meeting.SeriesUid && !r.Meeting.AlreadyImported))
-        {
-            sibling.ProjectValue = row.ProjectValue;
-            sibling.ApplyToSeries = true;
-            sibling.Selected = sibling.Selected || row.Selected;
-        }
-    }
+    private void OnProjectChanged(Row row, string? value) => row.ProjectValue = value;
 
     private async Task GuardAsync(Func<Task> action)
     {
@@ -585,6 +540,5 @@ else
         public CalendarMeetingDto Meeting { get; init; } = default!;
         public bool Selected { get; set; }
         public string? ProjectValue { get; set; }
-        public bool ApplyToSeries { get; set; }
     }
 }
