@@ -1,6 +1,7 @@
 @page "/tasks"
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Contracts.Tasks
+@using TimeTracker.Domain.Enums
 @using TimeTracker.Web.Components
 @using TimeTracker.Web.Services
 @inject TimeTrackerApi Api
@@ -44,10 +45,22 @@ else
         }
     </MudSelect>
 
-    <div class="d-flex justify-space-between align-center mb-3">
+    <div class="d-flex justify-space-between align-center mb-3 flex-wrap" style="gap:1rem">
         <MudText Typo="Typo.h5">My tasks</MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-                   OnClick="@(() => OpenDialogAsync(null))">Add task</MudButton>
+        <div class="d-flex align-center flex-wrap" style="gap:.75rem">
+            <MudTextField T="string" @bind-Value="search" Immediate="true" Clearable="true"
+                          Placeholder="Search tasks…" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense"
+                          Variant="Variant.Outlined" Style="min-width:220px" />
+            <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                <MudButton Variant="@(showAll ? Variant.Outlined : Variant.Filled)"
+                           Color="@(showAll ? Color.Default : Color.Primary)" OnClick="@(() => showAll = false)">Active</MudButton>
+                <MudButton Variant="@(showAll ? Variant.Filled : Variant.Outlined)"
+                           Color="@(showAll ? Color.Primary : Color.Default)" OnClick="@(() => showAll = true)">All</MudButton>
+            </MudButtonGroup>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="@(() => OpenDialogAsync(null))">Add task</MudButton>
+        </div>
     </div>
 
     @if (tasks is null)
@@ -60,10 +73,12 @@ else
     }
     else
     {
-        <MudTable Items="tasks" Hover="true" Dense="true" Elevation="1">
+        <MudTable Items="Filtered" Hover="true" Dense="true" Elevation="1">
             <HeaderContent>
                 <MudTh Style="width:1px">Done</MudTh>
+                <MudTh Style="width:1px; text-align:center">!</MudTh>
                 <MudTh>Task</MudTh>
+                <MudTh Style="width:1px; white-space:nowrap">Due</MudTh>
                 <MudTh Style="width:1px; white-space:nowrap">Est.</MudTh>
                 <MudTh Style="width:160px">Progress</MudTh>
                 <MudTh Style="width:1px"></MudTh>
@@ -73,6 +88,14 @@ else
                     <MudCheckBox T="bool" Value="@context.IsComplete"
                                  ValueChanged="@(_ => ToggleCompleteAsync(context))" />
                 </MudTd>
+                <MudTd Style="text-align:center">
+                    @if (context.Priority is { } p)
+                    {
+                        <MudTooltip Text="@($"{p} priority")">
+                            <MudIcon Icon="@PriorityIcon(p)" Color="@PriorityColor(p)" Size="Size.Small" />
+                        </MudTooltip>
+                    }
+                </MudTd>
                 <MudTd>
                     <MudText Typo="Typo.body1"
                              Style="@(context.IsComplete ? "text-decoration:line-through" : "")">
@@ -81,6 +104,18 @@ else
                     @if (!string.IsNullOrWhiteSpace(context.Description))
                     {
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Description</MudText>
+                    }
+                </MudTd>
+                <MudTd Style="white-space:nowrap">
+                    @if (context.DueDate is { } d)
+                    {
+                        <MudText Typo="Typo.body2" Color="@(IsOverdue(d, context.IsComplete) ? Color.Error : Color.Inherit)">
+                            @d.ToString("MMM d")
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">—</MudText>
                     }
                 </MudTd>
                 <MudTd Style="white-space:nowrap">
@@ -94,6 +129,10 @@ else
                     </div>
                 </MudTd>
                 <MudTd Style="text-align:right; white-space:nowrap">
+                    <MudTooltip Text="Log time">
+                        <MudIconButton Icon="@Icons.Material.Filled.MoreTime" Color="Color.Primary" Size="Size.Small"
+                                       OnClick="@(() => LogTimeAsync(context))" />
+                    </MudTooltip>
                     <MudTooltip Text="Edit">
                         <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
                                        OnClick="@(() => OpenDialogAsync(context))" />
@@ -104,6 +143,9 @@ else
                     </MudTooltip>
                 </MudTd>
             </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="mud-text-secondary">No tasks match the current search/filter.</MudText>
+            </NoRecordsContent>
         </MudTable>
     }
 }
@@ -111,8 +153,22 @@ else
 @code {
     private IReadOnlyList<OrganizationDto>? organizations;
     private IReadOnlyList<TaskDto>? tasks;
+    private IReadOnlyList<EntryFieldDto>? fields;
     private int selectedOrgId;
     private string? loadError;
+
+    private string? search;
+    private bool showAll; // false = active only (default)
+
+    private bool OrgRequiresTime =>
+        organizations?.FirstOrDefault(o => o.Id == selectedOrgId)?.RequireTime ?? true;
+
+    // Active-only + search filter, applied client-side over the loaded list.
+    private IEnumerable<TaskDto> Filtered => (tasks ?? Enumerable.Empty<TaskDto>())
+        .Where(t => showAll || !t.IsComplete)
+        .Where(t => string.IsNullOrWhiteSpace(search)
+            || t.Title.Contains(search!, StringComparison.OrdinalIgnoreCase)
+            || (t.Description?.Contains(search!, StringComparison.OrdinalIgnoreCase) ?? false));
 
     protected override Task OnInitializedAsync() => ReloadAllAsync();
 
@@ -135,7 +191,11 @@ else
         await GuardAsync(LoadAsync);
     }
 
-    private async Task LoadAsync() => tasks = await Api.GetTasksAsync(selectedOrgId);
+    private async Task LoadAsync()
+    {
+        tasks = await Api.GetTasksAsync(selectedOrgId);
+        fields = await Api.GetEntryFieldsAsync(selectedOrgId);
+    }
 
     private async Task OpenDialogAsync(TaskDto? task)
     {
@@ -146,10 +206,29 @@ else
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
         var dialog = await DialogService.ShowAsync<TaskDialog>(task is null ? "New task" : "Edit task", parameters, options);
-        var result = await dialog.Result;
-        if (result is { Canceled: false })
+        if (await dialog.Result is { Canceled: false })
         {
             await LoadAsync();
+        }
+    }
+
+    // Log time against a task: opens the shared entry dialog with the task pre-linked.
+    private async Task LogTimeAsync(TaskDto task)
+    {
+        var parameters = new DialogParameters<TimeEntryDialog>
+        {
+            { x => x.OrgId, selectedOrgId },
+            { x => x.Fields, fields ?? [] },
+            { x => x.Tasks, tasks },
+            { x => x.Entry, (TimeEntryDto?)null },
+            { x => x.RequireTime, OrgRequiresTime },
+            { x => x.InitialTaskId, (int?)task.Id },
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<TimeEntryDialog>($"Log time — {task.Title}", parameters, options);
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync(); // progress may have changed via the entry's task-progress control
         }
     }
 
@@ -165,6 +244,8 @@ else
             // Completing snaps to 100% (remember current); reopening reverts to the prior %.
             PercentComplete = completing ? 100 : (task.PercentBeforeComplete ?? task.PercentComplete),
             PercentBeforeComplete = completing ? task.PercentComplete : null,
+            Priority = task.Priority,
+            DueDate = task.DueDate,
         };
         await Api.UpdateTaskAsync(selectedOrgId, task.Id, request);
         await LoadAsync();
@@ -181,6 +262,25 @@ else
         Snackbar.Add("Task deleted", Severity.Success);
         await LoadAsync();
     }
+
+    private static string PriorityIcon(TaskPriority p) => p switch
+    {
+        TaskPriority.Urgent => Icons.Material.Filled.PriorityHigh,
+        TaskPriority.High => Icons.Material.Filled.KeyboardArrowUp,
+        TaskPriority.Medium => Icons.Material.Filled.DragHandle,
+        _ => Icons.Material.Filled.KeyboardArrowDown,
+    };
+
+    private static Color PriorityColor(TaskPriority p) => p switch
+    {
+        TaskPriority.Urgent => Color.Error,
+        TaskPriority.High => Color.Warning,
+        TaskPriority.Medium => Color.Info,
+        _ => Color.Default,
+    };
+
+    private static bool IsOverdue(DateOnly due, bool isComplete) =>
+        !isComplete && due < DateOnly.FromDateTime(DateTime.Today);
 
     private async Task GuardAsync(Func<Task> action)
     {

@@ -1,4 +1,5 @@
 @using TimeTracker.Contracts.Tasks
+@using TimeTracker.Domain.Enums
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
 @inject ISnackbar Snackbar
 
@@ -8,8 +9,23 @@
                       Variant="Variant.Outlined" Class="mb-3" />
         <MudTextField T="string" Label="Description" @bind-Value="description" Lines="2"
                       AutoGrow="true" MaxLines="10" Variant="Variant.Outlined" Class="mb-3" />
-        <MudNumericField T="decimal?" Label="Estimated hours" @bind-Value="estimatedHours"
-                         Min="0" Step="0.25M" Variant="Variant.Outlined" Class="mb-3" />
+        <MudGrid Class="mb-3">
+            <MudItem xs="12" sm="4">
+                <MudSelect T="TaskPriority?" Label="Priority" @bind-Value="priority" Clearable="true" Variant="Variant.Outlined">
+                    @foreach (var p in Enum.GetValues<TaskPriority>())
+                    {
+                        <MudSelectItem T="TaskPriority?" Value="@p">@p</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudDatePicker Label="Due date" @bind-Date="dueDate" Variant="Variant.Outlined" Clearable="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudNumericField T="decimal?" Label="Estimated hours" @bind-Value="estimatedHours"
+                                 Min="0" Step="0.25M" Variant="Variant.Outlined" />
+            </MudItem>
+        </MudGrid>
         <MudText Typo="Typo.body2">% complete: <b>@percentComplete%</b></MudText>
         <MudSlider T="int" @bind-Value="percentComplete" Min="0" Max="100" Step="5" Color="Color.Primary"
                    Disabled="isComplete" />
@@ -42,6 +58,8 @@
     private decimal? estimatedHours;
     private int percentComplete;
     private int priorPercent;
+    private TaskPriority? priority;
+    private DateTime? dueDate;
     private bool saving;
     private string? error;
 
@@ -55,6 +73,8 @@
             estimatedHours = t.EstimatedHours;
             percentComplete = t.PercentComplete;
             priorPercent = t.PercentBeforeComplete ?? t.PercentComplete;
+            priority = t.Priority;
+            dueDate = t.DueDate?.ToDateTime(TimeOnly.MinValue);
         }
     }
 
@@ -78,6 +98,8 @@
                 EstimatedHours = estimatedHours,
                 PercentComplete = percentComplete,
                 PercentBeforeComplete = isComplete ? priorPercent : null,
+                Priority = priority,
+                DueDate = dueDate is { } d ? DateOnly.FromDateTime(d) : null,
             };
             var result = Existing is null
                 ? await Api.CreateTaskAsync(OrgId, request)

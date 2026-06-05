@@ -1,3 +1,5 @@
+using TimeTracker.Domain.Enums;
+
 namespace TimeTracker.Domain.Entities;
 
 /// <summary>
@@ -15,6 +17,12 @@ public class TaskItem : AuditableEntity
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public bool IsComplete { get; set; }
+
+    /// <summary>Optional priority (null = none).</summary>
+    public TaskPriority? Priority { get; set; }
+
+    /// <summary>Optional due date.</summary>
+    public DateOnly? DueDate { get; set; }
 
     /// <summary>Optional estimate of effort in hours.</summary>
     public decimal? EstimatedHours { get; set; }

@@ -1,3 +1,5 @@
+using TimeTracker.Domain.Enums;
+
 namespace TimeTracker.Contracts.Tasks;
 
 /// <summary>A task the user may work on (and optionally log time against).</summary>
@@ -9,6 +11,8 @@ public record TaskDto(
     decimal? EstimatedHours,
     int PercentComplete,
     int? PercentBeforeComplete,
+    TaskPriority? Priority,
+    DateOnly? DueDate,
     DateTime CreatedUtc);
 
 /// <summary>Create/update payload for a task.</summary>
@@ -22,4 +26,10 @@ public record SaveTaskRequest
 
     /// <summary>Percent to restore to if completion is later removed (only kept while complete).</summary>
     public int? PercentBeforeComplete { get; init; }
+
+    /// <summary>Optional priority (null = none).</summary>
+    public TaskPriority? Priority { get; init; }
+
+    /// <summary>Optional due date.</summary>
+    public DateOnly? DueDate { get; init; }
 }
