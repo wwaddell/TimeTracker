@@ -1,0 +1,73 @@
+@using TimeTracker.Contracts.Organizations
+@inject TimeTracker.Web.Services.TimeTrackerApi Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string" Label="Name" @bind-Value="name" Required="true"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField T="string" Label="Description" @bind-Value="description" Lines="2"
+                      AutoGrow="true" MaxLines="10" Variant="Variant.Outlined" Class="mb-3" />
+        <MudSwitch T="bool" @bind-Value="isActive" Color="Color.Primary" Label="Active" />
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
+            @(saving ? "Saving…" : "Save changes")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public OrganizationDetailsDto Org { get; set; } = default!;
+
+    private string name = string.Empty;
+    private string? description;
+    private bool isActive = true;
+    private bool saving;
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        name = Org.Name;
+        description = Org.Description;
+        isActive = Org.IsActive;
+    }
+
+    private async Task SaveAsync()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            error = "Name is required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var result = await Api.SaveOrgDetailsAsync(Org.Id,
+                new SaveOrganizationRequest { Name = name, Description = description, IsActive = isActive });
+            if (result.Success)
+            {
+                Snackbar.Add("Organization saved", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                error = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

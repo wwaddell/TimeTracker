@@ -12,6 +12,26 @@ public static class OrganizationEndpoints
     {
         var grp = app.MapGroup("").RequireAuthorization();
 
+        // Organizations the current user may manage (holds ManageOrganization; dev/global admin
+        // sees all their member orgs). Powers the list-based Organization admin page.
+        grp.MapGet("/api/organizations/manageable",
+            async (TimeTrackerDbContext db, ICurrentUser currentUser) =>
+        {
+            var userId = await currentUser.GetUserIdAsync();
+
+            var query = currentUser.IsAdmin
+                ? db.Organizations.Where(o => o.Members.Any(m => m.UserId == userId))
+                : db.Organizations.Where(o => o.Members.Any(m => m.UserId == userId
+                    && m.Roles.Any(r => r.OrganizationRole.Rights.Any(rr => rr.Right == OrgRight.ManageOrganization))));
+
+            var orgs = await query
+                .OrderBy(o => o.Name)
+                .Select(o => new OrganizationDetailsDto(o.Id, o.Name, o.Description, o.IsActive))
+                .ToListAsync();
+
+            return Results.Ok(orgs);
+        });
+
         grp.MapGet("/api/organizations/{orgId:int}/details",
             async (int orgId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {

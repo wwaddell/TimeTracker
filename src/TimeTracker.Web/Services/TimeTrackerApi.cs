@@ -91,6 +91,9 @@ public class TimeTrackerApi(HttpClient http)
     public async Task<IReadOnlyList<RightDto>> GetRightsAsync() =>
         await GetAsync<List<RightDto>>("/api/rights") ?? [];
 
+    public async Task<IReadOnlyList<OrganizationDetailsDto>> GetManageableOrganizationsAsync() =>
+        await GetAsync<List<OrganizationDetailsDto>>("/api/organizations/manageable") ?? [];
+
     public async Task<OrganizationDetailsDto?> GetOrgDetailsAsync(int orgId) =>
         await GetAsync<OrganizationDetailsDto>($"/api/organizations/{orgId}/details");
 
