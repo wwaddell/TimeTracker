@@ -75,7 +75,6 @@ else
     {
         <MudTable Items="Filtered" Hover="true" Dense="true" Elevation="1">
             <HeaderContent>
-                <MudTh Style="width:1px">Done</MudTh>
                 <MudTh Style="width:1px; text-align:center">
                     <MudTableSortLabel T="TaskDto" SortBy="@(x => (int)(x.Priority ?? 0))">!</MudTableSortLabel>
                 </MudTh>
@@ -94,10 +93,6 @@ else
                 <MudTh Style="width:1px"></MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd>
-                    <MudCheckBox T="bool" Value="@context.IsComplete"
-                                 ValueChanged="@(_ => ToggleCompleteAsync(context))" />
-                </MudTd>
                 <MudTd Style="text-align:center">
                     @if (context.Priority is { } p)
                     {
@@ -240,25 +235,6 @@ else
         {
             await LoadAsync(); // progress may have changed via the entry's task-progress control
         }
-    }
-
-    private async Task ToggleCompleteAsync(TaskDto task)
-    {
-        var completing = !task.IsComplete;
-        var request = new SaveTaskRequest
-        {
-            Title = task.Title,
-            Description = task.Description,
-            EstimatedHours = task.EstimatedHours,
-            IsComplete = completing,
-            // Completing snaps to 100% (remember current); reopening reverts to the prior %.
-            PercentComplete = completing ? 100 : (task.PercentBeforeComplete ?? task.PercentComplete),
-            PercentBeforeComplete = completing ? task.PercentComplete : null,
-            Priority = task.Priority,
-            DueDate = task.DueDate,
-        };
-        await Api.UpdateTaskAsync(selectedOrgId, task.Id, request);
-        await LoadAsync();
     }
 
     private async Task DeleteAsync(TaskDto task)
