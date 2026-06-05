@@ -76,11 +76,21 @@ else
         <MudTable Items="Filtered" Hover="true" Dense="true" Elevation="1">
             <HeaderContent>
                 <MudTh Style="width:1px">Done</MudTh>
-                <MudTh Style="width:1px; text-align:center">!</MudTh>
-                <MudTh>Task</MudTh>
-                <MudTh Style="width:1px; white-space:nowrap">Due</MudTh>
-                <MudTh Style="width:1px; white-space:nowrap">Est.</MudTh>
-                <MudTh Style="width:160px">Progress</MudTh>
+                <MudTh Style="width:1px; text-align:center">
+                    <MudTableSortLabel T="TaskDto" SortBy="@(x => (int)(x.Priority ?? 0))">!</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel T="TaskDto" SortBy="@(x => x.Title)">Task</MudTableSortLabel>
+                </MudTh>
+                <MudTh Style="width:1px; white-space:nowrap">
+                    <MudTableSortLabel T="TaskDto" SortBy="@(x => x.DueDate ?? DateOnly.MaxValue)">Due</MudTableSortLabel>
+                </MudTh>
+                <MudTh Style="width:1px; white-space:nowrap">
+                    <MudTableSortLabel T="TaskDto" SortBy="@(x => x.EstimatedHours ?? -1m)">Est.</MudTableSortLabel>
+                </MudTh>
+                <MudTh Style="width:160px">
+                    <MudTableSortLabel T="TaskDto" SortBy="@(x => x.PercentComplete)">Progress</MudTableSortLabel>
+                </MudTh>
                 <MudTh Style="width:1px"></MudTh>
             </HeaderContent>
             <RowTemplate>
