@@ -1,6 +1,5 @@
 @page "/import"
 @using TimeTracker.Contracts.Calendar
-@using TimeTracker.Contracts.Tasks
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Web.Services
 @inject TimeTrackerApi Api
@@ -156,7 +155,7 @@ else
                     </MudTh>
                     <MudTh>Meeting</MudTh>
                     <MudTh Style="width:1px; white-space:nowrap">When</MudTh>
-                    <MudTh Style="width:220px">Task</MudTh>
+                    <MudTh Style="width:220px">Project</MudTh>
                     <MudTh Style="width:1px; white-space:nowrap">Whole series</MudTh>
                 </HeaderContent>
                 <RowTemplate>
@@ -202,22 +201,31 @@ else
                         </MudText>
                     </MudTd>
                     <MudTd>
-                        @if (tasks is { Count: > 0 } && !context.Meeting.AlreadyImported)
+                        @if (projectField is not null && !context.Meeting.AlreadyImported)
                         {
-                            <MudSelect T="int?" Value="context.TaskId" Clearable="true" Dense="true" Margin="Margin.Dense"
-                                       Variant="Variant.Outlined" ToStringFunc="@TaskToString"
-                                       ValueChanged="@(v => OnTaskChanged(context, v))" Placeholder="No task">
-                                @foreach (var task in tasks)
-                                {
-                                    <MudSelectItem T="int?" Value="@((int?)task.Id)">@task.Title</MudSelectItem>
-                                }
-                            </MudSelect>
+                            @if (projectField.Options.Count > 0)
+                            {
+                                <MudSelect T="string" Value="context.ProjectValue" Clearable="true" Dense="true" Margin="Margin.Dense"
+                                           Variant="Variant.Outlined" Placeholder="@($"No {projectField.Label.ToLowerInvariant()}")"
+                                           ValueChanged="@(v => OnProjectChanged(context, v))">
+                                    @foreach (var opt in projectField.Options)
+                                    {
+                                        <MudSelectItem T="string" Value="@opt.Value">@opt.Label</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                <MudTextField T="string" Value="context.ProjectValue" Dense="true" Margin="Margin.Dense"
+                                              Variant="Variant.Outlined" Placeholder="@projectField.Label" DebounceInterval="400"
+                                              ValueChanged="@(v => OnProjectChanged(context, v))" />
+                            }
                         }
                     </MudTd>
                     <MudTd Style="white-space:nowrap">
                         @if (context.Meeting.IsRecurring && !context.Meeting.AlreadyImported)
                         {
-                            <MudTooltip Text="Remember this task for the whole meeting series and future imports">
+                            <MudTooltip Text="Remember this project for the whole meeting series and future imports">
                                 <MudSwitch T="bool" Value="@context.ApplyToSeries" Color="Color.Primary" Dense="true"
                                            ValueChanged="@(v => OnApplyToSeriesChanged(context, v))" />
                             </MudTooltip>
@@ -234,7 +242,7 @@ else
 
 @code {
     private IReadOnlyList<OrganizationDto>? organizations;
-    private IReadOnlyList<TaskDto>? tasks;
+    private EntryFieldDto? projectField;
     private int selectedOrgId;
     private string? loadError;
 
@@ -298,10 +306,16 @@ else
             {
                 selectedOrgId = organizations[0].Id;
             }
-            tasks = await Api.GetTasksAsync(selectedOrgId);
+            projectField = FindProjectField(await Api.GetEntryFieldsAsync(selectedOrgId));
             connection = await Api.GetCalendarConnectionAsync(selectedOrgId);
         }
     });
+
+    // The configurable "Project" field for this org (a Select shows a dropdown; otherwise free text).
+    private static EntryFieldDto? FindProjectField(IReadOnlyList<EntryFieldDto> fields) =>
+        fields.FirstOrDefault(f =>
+            string.Equals(f.FieldKey, "project", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(f.Label, "project", StringComparison.OrdinalIgnoreCase));
 
     private async Task OnOrgChanged(int orgId)
     {
@@ -310,7 +324,7 @@ else
         usingSampleData = false;
         await GuardAsync(async () =>
         {
-            tasks = await Api.GetTasksAsync(selectedOrgId);
+            projectField = FindProjectField(await Api.GetEntryFieldsAsync(selectedOrgId));
             connection = await Api.GetCalendarConnectionAsync(selectedOrgId);
         });
     }
@@ -431,7 +445,9 @@ else
             {
                 Meeting = m,
                 Selected = m.Recommended,
-                TaskId = m.SuggestedTaskId,
+                ProjectValue = projectField is null
+                    ? null
+                    : m.SuggestedAttributes.FirstOrDefault(a => a.FieldId == projectField.Id)?.Value,
             }).ToList();
         }
         catch (ApiException ex)
@@ -468,9 +484,8 @@ else
                     StartTime = r.Meeting.StartTime,
                     DurationMinutes = r.Meeting.DurationMinutes,
                     IsRecurring = r.Meeting.IsRecurring,
-                    TaskId = r.TaskId,
-                    // Carry remembered field values onto the entry (and series tag if applying).
-                    Attributes = r.Meeting.SuggestedAttributes.ToDictionary(a => a.FieldId, a => a.Value),
+                    // Carry remembered field values, with the chosen Project applied on top.
+                    Attributes = BuildAttributes(r),
                     ApplyToSeries = r.ApplyToSeries,
                 }).ToList(),
             };
@@ -494,11 +509,29 @@ else
         }
     }
 
-    // When a recurring meeting's task is set with "whole series" on, propagate to its siblings
-    // visible in this list so the whole series imports consistently.
-    private void OnTaskChanged(Row row, int? taskId)
+    // Merge the meeting's remembered field values with the chosen Project (project wins).
+    private Dictionary<int, string?> BuildAttributes(Row r)
     {
-        row.TaskId = taskId;
+        var attrs = r.Meeting.SuggestedAttributes.ToDictionary(a => a.FieldId, a => a.Value);
+        if (projectField is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(r.ProjectValue))
+            {
+                attrs[projectField.Id] = r.ProjectValue;
+            }
+            else
+            {
+                attrs.Remove(projectField.Id);
+            }
+        }
+        return attrs;
+    }
+
+    // When a recurring meeting's project is set with "whole series" on, propagate to its siblings
+    // visible in this list so the whole series imports consistently.
+    private void OnProjectChanged(Row row, string? value)
+    {
+        row.ProjectValue = value;
         if (row.ApplyToSeries)
         {
             PropagateToSeries(row);
@@ -524,14 +557,11 @@ else
         foreach (var sibling in rows.Where(r =>
             r != row && r.Meeting.SeriesUid == row.Meeting.SeriesUid && !r.Meeting.AlreadyImported))
         {
-            sibling.TaskId = row.TaskId;
+            sibling.ProjectValue = row.ProjectValue;
             sibling.ApplyToSeries = true;
             sibling.Selected = sibling.Selected || row.Selected;
         }
     }
-
-    private string TaskToString(int? id) =>
-        tasks?.FirstOrDefault(t => t.Id == id)?.Title ?? string.Empty;
 
     private async Task GuardAsync(Func<Task> action)
     {
@@ -554,7 +584,7 @@ else
     {
         public CalendarMeetingDto Meeting { get; init; } = default!;
         public bool Selected { get; set; }
-        public int? TaskId { get; set; }
+        public string? ProjectValue { get; set; }
         public bool ApplyToSeries { get; set; }
     }
 }
