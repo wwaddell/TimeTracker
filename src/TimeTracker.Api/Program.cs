@@ -108,6 +108,22 @@ app.UseCors(WebCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 
+// API responses are dynamic JSON — never let the browser serve a cached copy. Without this
+// the browser may heuristically cache GETs (and SPAs see stale data after an edit on a
+// sibling page, e.g. renaming a project doesn't reflect in pickers until a hard reload).
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path.StartsWithSegments("/api"))
+    {
+        ctx.Response.OnStarting(() =>
+        {
+            ctx.Response.Headers["Cache-Control"] = "no-store";
+            return Task.CompletedTask;
+        });
+    }
+    await next();
+});
+
 app.MapTimeTrackerEndpoints();
 app.MapTaskEndpoints();
 app.MapAdminEndpoints();

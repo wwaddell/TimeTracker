@@ -52,8 +52,8 @@ else
         </MudSelect>
     }
 
-    <div class="d-flex justify-space-between align-center mb-3 flex-wrap" style="gap:1rem">
-        <MudText Typo="Typo.h5">Tasks</MudText>
+    @* No page title — the nav highlights "Tasks" and the columns headers narrate. *@
+    <div class="d-flex justify-end align-center mb-3 flex-wrap" style="gap:1rem">
         <div class="d-flex align-center flex-wrap" style="gap:.75rem">
             <MudSelect T="string" Value="scope" ValueChanged="OnScopeChanged" Dense="true"
                        Margin="Margin.Dense" Variant="Variant.Outlined" Label="Show" Style="min-width:200px">
