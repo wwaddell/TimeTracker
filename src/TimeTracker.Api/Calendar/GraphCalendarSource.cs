@@ -16,6 +16,9 @@ public sealed class GraphCalendarSource(HttpClient http) : ICalendarSource
     private const string Select =
         "id,iCalUId,seriesMasterId,type,subject,start,end,isAllDay,showAs,organizer";
 
+    // Safety cap so a huge calendar window can't pull an unbounded result set into memory.
+    private const int MaxEvents = 1000;
+
     public async Task<IReadOnlyList<CalendarEvent>> GetEventsAsync(
         string accessToken, DateTimeOffset fromUtc, DateTimeOffset toUtc, CancellationToken ct = default)
     {
@@ -26,8 +29,8 @@ public sealed class GraphCalendarSource(HttpClient http) : ICalendarSource
         var url = $"me/calendarView?startDateTime={start}&endDateTime={end}"
                 + $"&$select={Select}&$orderby=start/dateTime&$top=100";
 
-        // Follow @odata.nextLink until the window is fully paged.
-        while (url is not null)
+        // Follow @odata.nextLink until the window is fully paged (or the safety cap is hit).
+        while (url is not null && results.Count < MaxEvents)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);

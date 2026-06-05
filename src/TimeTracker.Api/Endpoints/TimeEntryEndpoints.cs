@@ -85,6 +85,8 @@ public static class TimeEntryEndpoints
                     e.TaskId,
                     e.Task != null ? e.Task.Title : null,
                     e.CreatedUtc,
+                    e.Source,
+                    e.SourceIsRecurring,
                     e.Attributes.Select(a => new TimeEntryAttributeDto(
                         a.TimeEntryFieldId, a.TimeEntryField.Label, a.Value)).ToList()))
                 .ToListAsync();

@@ -147,9 +147,13 @@ else
                 </MudButton>
             </div>
 
-            <MudTable Items="rows" Hover="true" Dense="true" Elevation="1" Class="mb-4">
+            <MudTable Items="rows" Hover="true" Dense="true" Elevation="1" Class="mb-4" RowsPerPage="50">
                 <HeaderContent>
-                    <MudTh Style="width:1px"></MudTh>
+                    <MudTh Style="width:1px">
+                        <MudTooltip Text="Select / clear all importable">
+                            <MudCheckBox T="bool?" Value="@HeaderChecked" ValueChanged="ToggleAll" Dense="true" />
+                        </MudTooltip>
+                    </MudTh>
                     <MudTh>Meeting</MudTh>
                     <MudTh Style="width:1px; white-space:nowrap">When</MudTh>
                     <MudTh Style="width:220px">Task</MudTh>
@@ -220,6 +224,9 @@ else
                         }
                     </MudTd>
                 </RowTemplate>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+                </PagerContent>
             </MudTable>
         }
     }
@@ -243,6 +250,38 @@ else
     private CalendarConnectionStatusDto? connection;
 
     private int SelectedCount => rows?.Count(r => r.Selected && !r.Meeting.AlreadyImported) ?? 0;
+
+    // Tri-state header checkbox: checked = all importable selected, indeterminate = some, else clear.
+    private bool? HeaderChecked
+    {
+        get
+        {
+            var importable = rows?.Where(r => !r.Meeting.AlreadyImported).ToList();
+            if (importable is null || importable.Count == 0)
+            {
+                return false;
+            }
+            if (importable.All(r => r.Selected))
+            {
+                return true;
+            }
+            return importable.Any(r => r.Selected) ? null : false;
+        }
+    }
+
+    private void ToggleAll(bool? _)
+    {
+        if (rows is null)
+        {
+            return;
+        }
+        // Clear if everything is already selected; otherwise select all importable rows.
+        var selectAll = HeaderChecked != true;
+        foreach (var r in rows.Where(r => !r.Meeting.AlreadyImported))
+        {
+            r.Selected = selectAll;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {

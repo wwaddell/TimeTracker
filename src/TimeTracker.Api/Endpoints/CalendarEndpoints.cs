@@ -209,6 +209,7 @@ public static class CalendarEndpoints
                     SourceSeriesUid = m.SeriesUid,
                     SourceEventId = m.EventId,
                     SourceOccurrenceStartUtc = m.OccurrenceStartUtc,
+                    SourceIsRecurring = m.IsRecurring,
                     CreatedUtc = DateTime.UtcNow,
                 };
 

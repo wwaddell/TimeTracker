@@ -2,6 +2,7 @@
 @page "/log"
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Contracts.Tasks
+@using TimeTracker.Domain.Enums
 @using TimeTracker.Web.Components
 @using TimeTracker.Web.Services
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
@@ -88,7 +89,21 @@ else
                 <MudPaper Class="pa-4" Outlined="true" Style="cursor:pointer"
                           @onclick="@(() => OpenEdit(entry))">
                     <div class="d-flex justify-space-between" style="gap:1rem">
-                        <MudText Typo="Typo.subtitle1" Style="font-weight:600; word-break:break-word">@entry.Note</MudText>
+                        <div class="d-flex align-center" style="gap:.35rem; min-width:0">
+                            <MudText Typo="Typo.subtitle1" Style="font-weight:600; word-break:break-word">@entry.Note</MudText>
+                            @if (entry.Source == TimeEntrySource.OutlookGraph)
+                            {
+                                <MudTooltip Text="Imported from Outlook">
+                                    <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Small" Class="mud-text-secondary" />
+                                </MudTooltip>
+                            }
+                            @if (entry.SourceIsRecurring)
+                            {
+                                <MudTooltip Text="Recurring meeting">
+                                    <MudIcon Icon="@Icons.Material.Filled.Repeat" Size="Size.Small" Class="mud-text-secondary" />
+                                </MudTooltip>
+                            }
+                        </div>
                         <div class="d-flex align-center flex-none" style="gap:.25rem">
                             <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="white-space:nowrap">
                                 @entry.EntryDate.ToString("yyyy-MM-dd")

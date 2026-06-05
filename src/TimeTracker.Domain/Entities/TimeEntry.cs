@@ -27,6 +27,9 @@ public class TimeEntry : AuditableEntity
     /// <summary>For imported entries, the source occurrence id (Graph event <c>id</c>).</summary>
     public string? SourceEventId { get; set; }
 
+    /// <summary>For imported entries, whether the meeting was part of a recurring series.</summary>
+    public bool SourceIsRecurring { get; set; }
+
     /// <summary>
     /// For imported entries, the specific occurrence's start instant (UTC). Combined with
     /// <see cref="SourceSeriesUid"/> this uniquely identifies an occurrence for de-duplication.

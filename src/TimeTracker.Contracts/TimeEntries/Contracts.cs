@@ -44,4 +44,6 @@ public record TimeEntryDto(
     int? TaskId,
     string? TaskTitle,
     DateTime CreatedUtc,
+    TimeEntrySource Source,
+    bool SourceIsRecurring,
     IReadOnlyList<TimeEntryAttributeDto> Attributes);
