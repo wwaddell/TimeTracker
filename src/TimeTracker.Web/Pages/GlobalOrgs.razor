@@ -6,7 +6,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
-<PageTitle>Organizations</PageTitle>
+<PageTitle>Global Admin</PageTitle>
 
 @if (loadError is not null)
 {
@@ -20,7 +20,7 @@
 }
 
 <div class="d-flex justify-space-between align-center mb-1">
-    <MudText Typo="Typo.h5">Organizations</MudText>
+    <MudText Typo="Typo.h5">Global Admin</MudText>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
                OnClick="@(() => OpenOrgDialogAsync(null))">New organization</MudButton>
 </div>
