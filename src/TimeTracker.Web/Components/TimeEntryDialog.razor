@@ -7,7 +7,8 @@
 
 <MudDialog>
     <DialogContent>
-        <TimeEntryFields Model="model" Fields="Fields" Tasks="Tasks" RequireTime="RequireTime" />
+        <TimeEntryFields @ref="entryFields" Model="model" Fields="Fields" Tasks="Tasks"
+                         OrgId="OrgId" RequireTime="RequireTime" />
         @if (Entry is not null && MissingRequired() is { Count: > 0 } missing)
         {
             <MudAlert Severity="Severity.Info" Class="mt-3" Dense="true">
@@ -41,6 +42,7 @@
     [Parameter] public bool RequireTime { get; set; } = true;
 
     private TimeEntryModel model = new();
+    private TimeEntryFields entryFields = default!;
     private bool saving;
     private string? error;
 
@@ -78,6 +80,8 @@
 
             if (result.Success)
             {
+                // Persist any task progress adjustment made alongside the entry.
+                await entryFields.PersistTaskProgressAsync();
                 Snackbar.Add(Entry is null ? "Entry added" : "Entry updated", Severity.Success);
                 MudDialog.Close(DialogResult.Ok(true));
             }

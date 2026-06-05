@@ -313,7 +313,12 @@ else
         if (result is { Canceled: false })
         {
             if (entry is null) { page = 1; }
-            await GuardAsync(LoadEntriesAsync);
+            // Reload tasks too — the entry may have adjusted a task's progress.
+            await GuardAsync(async () =>
+            {
+                tasks = await Api.GetTasksAsync(selectedOrgId);
+                await LoadEntriesAsync();
+            });
         }
     }
 

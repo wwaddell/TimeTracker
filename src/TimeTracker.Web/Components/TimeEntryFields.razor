@@ -2,6 +2,7 @@
 @using TimeTracker.Contracts.Tasks
 @using TimeTracker.Domain.Enums
 @using TimeTracker.Web.Models
+@inject TimeTracker.Web.Services.TimeTrackerApi Api
 
 <MudTextField T="string" Label="Note" @bind-Value="Model.Note" Lines="2" AutoGrow="true" MaxLines="12"
               Required="true" Immediate="true" Variant="Variant.Outlined" Class="mb-3"
@@ -25,7 +26,7 @@
 
 @if (Tasks is { Count: > 0 })
 {
-    <MudSelect T="int?" Label="Task" @bind-Value="Model.TaskId" Clearable="true"
+    <MudSelect T="int?" Label="Task" Value="Model.TaskId" ValueChanged="OnTaskChanged" Clearable="true"
                Variant="Variant.Outlined" Class="mt-3" ToStringFunc="@TaskToString">
         @foreach (var task in Tasks)
         {
@@ -40,6 +41,40 @@
             </MudSelectItem>
         }
     </MudSelect>
+
+    @if (SelectedTask is { } selected)
+    {
+        <MudPaper Class="pa-3 mt-2" Outlined="true">
+            <div class="d-flex justify-space-between align-center mb-1">
+                <MudText Typo="Typo.body2"><b>Task progress</b></MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    @if (selected.EstimatedHours is { } est)
+                    {
+                        <span>@($"{est:0.##}h estimated")</span>
+                        @if (RemainingHours is { } rem)
+                        {
+                            <span> · @($"{rem:0.##}h left")</span>
+                        }
+                    }
+                    else
+                    {
+                        <span>No estimate</span>
+                    }
+                </MudText>
+            </div>
+            <div class="d-flex align-center" style="gap:1rem">
+                <MudSlider T="int" Value="taskPercent" ValueChanged="OnPercentChanged"
+                           Min="0" Max="100" Step="5" Color="Color.Primary" Class="flex-grow-1" />
+                <MudText Typo="Typo.body2" Style="width:3rem; text-align:right"><b>@taskPercent%</b></MudText>
+            </div>
+            @if (taskPercent != selected.PercentComplete)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Saving this entry updates the task from @selected.PercentComplete% to @taskPercent%@(taskPercent >= 100 ? " (marks it complete)" : "").
+                </MudText>
+            }
+        </MudPaper>
+    }
 }
 
 @if (Fields is { Count: > 0 })
@@ -95,9 +130,21 @@
     [Parameter, EditorRequired] public TimeEntryModel Model { get; set; } = default!;
     [Parameter] public IReadOnlyList<EntryFieldDto> Fields { get; set; } = [];
     [Parameter] public IReadOnlyList<TaskDto>? Tasks { get; set; }
+    [Parameter] public int OrgId { get; set; }
 
     /// <summary>When false, the org captures date only — the time field is hidden and cleared.</summary>
     [Parameter] public bool RequireTime { get; set; } = true;
+
+    // Editable copy of the selected task's completion %, kept in sync with the picker.
+    private int taskPercent;
+    private int? syncedTaskId;
+    private bool progressSynced;
+
+    private TaskDto? SelectedTask => Tasks?.FirstOrDefault(t => t.Id == Model.TaskId);
+
+    // Remaining = estimate scaled by the portion not yet complete.
+    private decimal? RemainingHours =>
+        SelectedTask?.EstimatedHours is { } est ? Math.Round(est * (100 - taskPercent) / 100m, 2) : null;
 
     protected override void OnParametersSet()
     {
@@ -105,6 +152,47 @@
         {
             Model.StartTime = null;
         }
+
+        // Sync the editable percent from the task when the selection identity changes
+        // (e.g. opening an existing entry), without clobbering an in-progress edit.
+        if (!progressSynced || syncedTaskId != Model.TaskId)
+        {
+            progressSynced = true;
+            syncedTaskId = Model.TaskId;
+            taskPercent = SelectedTask?.PercentComplete ?? 0;
+        }
+    }
+
+    private void OnTaskChanged(int? taskId)
+    {
+        Model.TaskId = taskId;
+        syncedTaskId = taskId;
+        taskPercent = SelectedTask?.PercentComplete ?? 0;
+    }
+
+    private void OnPercentChanged(int value) => taskPercent = value;
+
+    /// <summary>
+    /// Persists the adjusted task progress if it changed. Called by the entry dialog on save.
+    /// Reaching 100% marks the task complete (remembering the prior % to restore on reopen).
+    /// </summary>
+    public async Task PersistTaskProgressAsync()
+    {
+        if (SelectedTask is not { } task || taskPercent == task.PercentComplete)
+        {
+            return;
+        }
+
+        var complete = taskPercent >= 100;
+        await Api.UpdateTaskAsync(OrgId, task.Id, new SaveTaskRequest
+        {
+            Title = task.Title,
+            Description = task.Description,
+            EstimatedHours = task.EstimatedHours,
+            IsComplete = complete,
+            PercentComplete = taskPercent,
+            PercentBeforeComplete = complete ? task.PercentComplete : null,
+        });
     }
 
     // MudDatePicker/MudTimePicker work in DateTime?/TimeSpan?; map to the model's DateOnly/TimeOnly.
