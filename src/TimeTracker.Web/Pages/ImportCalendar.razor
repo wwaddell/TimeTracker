@@ -162,24 +162,28 @@ else
                                      ValueChanged="@(v => context.Selected = v)" />
                     </MudTd>
                     <MudTd>
-                        <div class="d-flex align-center" style="gap:.4rem">
+                        <div class="d-flex align-center" style="gap:.35rem">
                             <MudText Typo="Typo.body2"
                                      Style="@(context.Meeting.AlreadyImported ? "opacity:.6" : "")">
                                 <b>@context.Meeting.Subject</b>
                             </MudText>
                             @if (context.Meeting.IsRecurring)
                             {
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info"
-                                         Icon="@Icons.Material.Filled.Repeat">Recurring</MudChip>
-                            }
-                            @if (context.Meeting.AlreadyImported)
-                            {
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success"
-                                         Icon="@Icons.Material.Filled.Check">Imported</MudChip>
+                                <MudTooltip Text="Recurring meeting">
+                                    <MudIcon Icon="@Icons.Material.Filled.Repeat" Size="Size.Small" Color="Color.Info" />
+                                </MudTooltip>
                             }
                             @if (context.Meeting.IsAllDay)
                             {
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">All-day</MudChip>
+                                <MudTooltip Text="All-day event">
+                                    <MudIcon Icon="@Icons.Material.Filled.WbSunny" Size="Size.Small" />
+                                </MudTooltip>
+                            }
+                            @if (context.Meeting.AlreadyImported)
+                            {
+                                <MudTooltip Text="Already imported to your log">
+                                    <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Size="Size.Small" Color="Color.Success" />
+                                </MudTooltip>
                             }
                         </div>
                         @if (!string.IsNullOrWhiteSpace(context.Meeting.OrganizerName))

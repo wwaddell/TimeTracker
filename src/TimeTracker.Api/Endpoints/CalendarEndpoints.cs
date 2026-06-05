@@ -149,6 +149,23 @@ public static class CalendarEndpoints
                 .Select(f => f.Id)
                 .ToListAsync();
 
+            // Imported meetings default to Category = "Meeting" when the org has such a
+            // select field with a matching option (and the meeting doesn't set one already).
+            var categoryField = await db.TimeEntryFields
+                .Where(f => f.OrganizationId == orgId && f.IsActive && f.DataType == FieldDataType.Select
+                    && (f.FieldKey.ToLower() == "category" || f.Label.ToLower() == "category"))
+                .Select(f => new
+                {
+                    f.Id,
+                    MeetingValue = f.Options
+                        .Where(o => o.Value.ToLower() == "meeting" || o.Label.ToLower() == "meeting")
+                        .Select(o => o.Value)
+                        .FirstOrDefault(),
+                })
+                .FirstOrDefaultAsync();
+            var defaultCategoryFieldId = categoryField?.MeetingValue is not null ? categoryField.Id : (int?)null;
+            var defaultCategoryValue = categoryField?.MeetingValue;
+
             var uids = request.Meetings.Select(m => m.SeriesUid).Distinct().ToList();
 
             // Occurrence keys already imported — so re-running an import never duplicates.
@@ -201,6 +218,13 @@ public static class CalendarEndpoints
                     {
                         entry.Attributes.Add(new TimeEntryAttribute { TimeEntryFieldId = fieldId, Value = value });
                     }
+                }
+
+                // Default the Category to "Meeting" unless the meeting already set that field.
+                if (defaultCategoryFieldId is { } catId && defaultCategoryValue is { } catVal
+                    && entry.Attributes.All(a => a.TimeEntryFieldId != catId))
+                {
+                    entry.Attributes.Add(new TimeEntryAttribute { TimeEntryFieldId = catId, Value = catVal });
                 }
 
                 db.TimeEntries.Add(entry);
