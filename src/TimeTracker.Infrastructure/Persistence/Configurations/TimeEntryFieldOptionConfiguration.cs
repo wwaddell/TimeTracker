@@ -8,7 +8,8 @@ public class TimeEntryFieldOptionConfiguration : IEntityTypeConfiguration<TimeEn
 {
     public void Configure(EntityTypeBuilder<TimeEntryFieldOption> builder)
     {
-        builder.ToTable("t_time_entry_field_option");
+        // Reference data: admins define the small set of allowed values for a Select field.
+        builder.ToTable("t_type_time_entry_field_option");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Value).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Label).IsRequired().HasMaxLength(200);

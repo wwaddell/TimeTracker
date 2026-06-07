@@ -8,7 +8,8 @@ public class TimeEntryFieldConfiguration : IEntityTypeConfiguration<TimeEntryFie
 {
     public void Configure(EntityTypeBuilder<TimeEntryField> builder)
     {
-        builder.ToTable("t_time_entry_field");
+        // Reference data: admins define a small, slow-changing set of field definitions per org.
+        builder.ToTable("t_type_time_entry_field");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.FieldKey).IsRequired().HasMaxLength(100);
         builder.Property(x => x.Label).IsRequired().HasMaxLength(200);

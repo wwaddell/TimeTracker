@@ -8,7 +8,9 @@ public class OrganizationRoleConfiguration : IEntityTypeConfiguration<Organizati
 {
     public void Configure(EntityTypeBuilder<OrganizationRole> builder)
     {
-        builder.ToTable("t_organization_role");
+        // Reference data: admins define a small set of roles per org. Membership/assignments
+        // (t_user_organization_role, t_organization_role_right) stay as t_* — they're link tables.
+        builder.ToTable("t_type_organization_role");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Name).IsRequired().HasMaxLength(100);
 
