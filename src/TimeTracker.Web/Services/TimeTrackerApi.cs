@@ -31,10 +31,13 @@ public class TimeTrackerApi(HttpClient http)
     public async Task<IReadOnlyList<EntryFieldDto>> GetEntryFieldsAsync(int orgId) =>
         await GetAsync<List<EntryFieldDto>>($"/api/organizations/{orgId}/entry-fields") ?? [];
 
-    public async Task<PagedResult<TimeEntryDto>> GetTimeEntriesAsync(int orgId, int page, int pageSize) =>
-        await GetAsync<PagedResult<TimeEntryDto>>(
-            $"/api/organizations/{orgId}/time-entries?page={page}&pageSize={pageSize}")
-        ?? new PagedResult<TimeEntryDto>([], page, pageSize, 0);
+    public async Task<TimeEntriesPage> GetTimeEntriesAsync(int orgId, int page, int pageSize, string? group = null)
+    {
+        var url = $"/api/organizations/{orgId}/time-entries?page={page}&pageSize={pageSize}"
+            + (string.IsNullOrEmpty(group) ? "" : $"&group={Uri.EscapeDataString(group)}");
+        return await GetAsync<TimeEntriesPage>(url)
+            ?? new TimeEntriesPage([], page, pageSize, 0, []);
+    }
 
     public async Task<ApiResult> CreateTimeEntryAsync(int orgId, CreateTimeEntryRequest request) =>
         await SendAsync(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/time-entries", request));

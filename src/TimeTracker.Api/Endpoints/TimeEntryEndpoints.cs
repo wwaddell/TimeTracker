@@ -66,35 +66,166 @@ public static class TimeEntryEndpoints
             return Results.Ok(fields);
         });
 
-        // Recent time entries for the current user in an org (paged).
+        // Recent time entries for the current user in an org (paged, optionally grouped).
+        // group=day|week|month adds a GroupKey to each entry and a Groups array with full-group
+        // stats (total minutes, entry count, missing-required-fields count). Week boundaries
+        // follow the user's WeekStartsOn preference.
         api.MapGet("/api/organizations/{orgId:int}/time-entries",
-            async (int orgId, int? page, int? pageSize, TimeTrackerDbContext db, ICurrentUser currentUser) =>
+            async (int orgId, int? page, int? pageSize, string? group,
+                   TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
             var userId = await currentUser.GetUserIdAsync();
             var p = Math.Max(1, page ?? 1);
             var size = Math.Clamp(pageSize ?? 10, 1, 100);
+            var grouping = ParseGrouping(group);
 
-            var query = db.TimeEntries.Where(e => e.OrganizationId == orgId && e.UserId == userId);
-            var total = await query.CountAsync();
+            var baseQuery = db.TimeEntries.Where(e => e.OrganizationId == orgId && e.UserId == userId);
+            var total = await baseQuery.CountAsync();
 
-            var items = await query
+            // Materialize just the dates+ids needed for the page so we can compute group keys
+            // without round-tripping the heavy projection twice.
+            var pageRows = await baseQuery
                 .OrderByDescending(e => e.EntryDate).ThenByDescending(e => e.Id)
                 .Skip((p - 1) * size).Take(size)
-                .Select(e => new TimeEntryDto(
-                    e.Id, e.EntryDate, e.StartTime, e.DurationMinutes, e.Note,
-                    e.TaskId,
-                    e.Task != null ? e.Task.Title : null,
-                    e.ProjectId,
-                    e.Project != null ? e.Project.Name : null,
-                    e.CreatedUtc,
-                    e.Source,
-                    e.SourceIsRecurring,
-                    e.Attributes.Select(a => new TimeEntryAttributeDto(
-                        a.TimeEntryFieldId, a.TimeEntryField.Label, a.Value)).ToList()))
+                .Select(e => new { e.Id, e.EntryDate })
+                .ToListAsync();
+            var pageIds = pageRows.Select(r => r.Id).ToList();
+
+            // For week grouping we need the user's preferred week start.
+            var weekStart = grouping == Grouping.Week
+                ? await db.Users.Where(u => u.Id == userId).Select(u => u.WeekStartsOn).FirstAsync()
+                : DayOfWeek.Sunday;
+
+            // Page items in their original order, with group key attached.
+            var items = await baseQuery
+                .Where(e => pageIds.Contains(e.Id))
+                .OrderByDescending(e => e.EntryDate).ThenByDescending(e => e.Id)
+                .Select(e => new
+                {
+                    Dto = new TimeEntryDto(
+                        e.Id, e.EntryDate, e.StartTime, e.DurationMinutes, e.Note,
+                        e.TaskId,
+                        e.Task != null ? e.Task.Title : null,
+                        e.ProjectId,
+                        e.Project != null ? e.Project.Name : null,
+                        e.CreatedUtc,
+                        e.Source,
+                        e.SourceIsRecurring,
+                        "", // GroupKey filled in below
+                        e.Attributes.Select(a => new TimeEntryAttributeDto(
+                            a.TimeEntryFieldId, a.TimeEntryField.Label, a.Value)).ToList()),
+                    EntryDate = e.EntryDate,
+                })
                 .ToListAsync();
 
-            return Results.Ok(new PagedResult<TimeEntryDto>(items, p, size, total));
+            var withKeys = items
+                .Select(x => x.Dto with { GroupKey = GroupKeyFor(x.EntryDate, grouping, weekStart) })
+                .ToList();
+
+            // No grouping → just return the page.
+            if (grouping == Grouping.None)
+            {
+                return Results.Ok(new TimeEntriesPage(withKeys, p, size, total, []));
+            }
+
+            // Compute the date ranges covered by the visible groups, then load ALL entries
+            // in those ranges so totals reflect the full group (not just the page slice).
+            var groupKeys = withKeys.Select(e => e.GroupKey).Distinct().ToList();
+            var ranges = groupKeys
+                .Select(k => GroupRange(k, grouping, weekStart))
+                .ToList();
+            var minDate = ranges.Min(r => r.start);
+            var maxDate = ranges.Max(r => r.endInclusive);
+
+            // Required-field ids visible to this user in this org (org-wide or matching a held role).
+            var roleIds = await currentUser.GetRoleIdsAsync(orgId);
+            var requiredFieldIds = await db.TimeEntryFields
+                .Where(f => f.OrganizationId == orgId && f.IsActive && f.IsRequired
+                    && (f.OrganizationRoleId == null || roleIds.Contains(f.OrganizationRoleId.Value)))
+                .Select(f => f.Id)
+                .ToListAsync();
+
+            // Pull every entry in the visible groups' date span, plus its filled attribute ids
+            // (only required ones — we just need to check coverage).
+            var requiredSet = requiredFieldIds.ToHashSet();
+            var groupEntries = await baseQuery
+                .Where(e => e.EntryDate >= minDate && e.EntryDate <= maxDate)
+                .Select(e => new
+                {
+                    e.Id,
+                    e.EntryDate,
+                    e.DurationMinutes,
+                    FilledRequiredCount = e.Attributes
+                        .Count(a => requiredSet.Contains(a.TimeEntryFieldId)
+                            && a.Value != null && a.Value.Trim().Length > 0),
+                })
+                .ToListAsync();
+
+            var groups = groupEntries
+                .GroupBy(e => GroupKeyFor(e.EntryDate, grouping, weekStart))
+                .Where(g => groupKeys.Contains(g.Key))
+                .Select(g => new TimeEntryGroupDto(
+                    g.Key,
+                    GroupLabel(g.Key, grouping, weekStart),
+                    g.Sum(e => e.DurationMinutes ?? 0),
+                    g.Count(),
+                    g.Count(e => e.FilledRequiredCount < requiredSet.Count)))
+                // Newest group first (matches the entry order).
+                .OrderByDescending(g => g.Key)
+                .ToList();
+
+            return Results.Ok(new TimeEntriesPage(withKeys, p, size, total, groups));
         });
+
+        static Grouping ParseGrouping(string? g) => g?.ToLowerInvariant() switch
+        {
+            "day" => Grouping.Day,
+            "week" => Grouping.Week,
+            "month" => Grouping.Month,
+            _ => Grouping.None,
+        };
+
+        // Group key (used to bucket entries) — stable, sortable.
+        // Day: "yyyy-MM-dd"   Week: start-of-week "yyyy-MM-dd"   Month: "yyyy-MM"
+        static string GroupKeyFor(DateOnly date, Grouping g, DayOfWeek weekStart) => g switch
+        {
+            Grouping.Day => date.ToString("yyyy-MM-dd"),
+            Grouping.Week => WeekStart(date, weekStart).ToString("yyyy-MM-dd"),
+            Grouping.Month => date.ToString("yyyy-MM"),
+            _ => "",
+        };
+
+        // Inclusive [start, end] date range covered by the group key (so we know which entries to sum).
+        static (DateOnly start, DateOnly endInclusive) GroupRange(string key, Grouping g, DayOfWeek weekStart) => g switch
+        {
+            Grouping.Day => (DateOnly.Parse(key), DateOnly.Parse(key)),
+            Grouping.Week => (DateOnly.Parse(key), DateOnly.Parse(key).AddDays(6)),
+            Grouping.Month => MonthRange(key),
+            _ => (DateOnly.MinValue, DateOnly.MaxValue),
+        };
+
+        static (DateOnly, DateOnly) MonthRange(string key) // "yyyy-MM"
+        {
+            var year = int.Parse(key[..4]);
+            var month = int.Parse(key[5..]);
+            var first = new DateOnly(year, month, 1);
+            return (first, first.AddMonths(1).AddDays(-1));
+        }
+
+        static DateOnly WeekStart(DateOnly date, DayOfWeek weekStart)
+        {
+            var diff = ((int)date.DayOfWeek - (int)weekStart + 7) % 7;
+            return date.AddDays(-diff);
+        }
+
+        // Human-readable header label per grouping.
+        static string GroupLabel(string key, Grouping g, DayOfWeek weekStart) => g switch
+        {
+            Grouping.Day => DateOnly.Parse(key).ToString("ddd, MMM d, yyyy"),
+            Grouping.Week => $"Week of {DateOnly.Parse(key):MMM d, yyyy}",
+            Grouping.Month => DateOnly.Parse(key + "-01").ToString("MMMM yyyy"),
+            _ => key,
+        };
 
         // Create a time entry.
         api.MapPost("/api/organizations/{orgId:int}/time-entries",
@@ -227,4 +358,6 @@ public static class TimeEntryEndpoints
             return Results.NoContent();
         });
     }
+
+    private enum Grouping { None, Day, Week, Month }
 }

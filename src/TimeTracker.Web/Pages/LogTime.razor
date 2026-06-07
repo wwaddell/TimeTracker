@@ -79,10 +79,23 @@ else
         }
     </MudPaper>
 
-    @if (me?.CompactMode != true)
-    {
-        <MudText Typo="Typo.h5" Class="mb-3">Recent entries</MudText>
-    }
+    <div class="d-flex justify-space-between align-center mb-3 flex-wrap" style="gap:1rem">
+        @if (me?.CompactMode != true)
+        {
+            <MudText Typo="Typo.h5">Recent entries</MudText>
+        }
+        else
+        {
+            <span></span>
+        }
+        <MudSelect T="string" Value="groupBy" ValueChanged="OnGroupChanged" Dense="true"
+                   Margin="Margin.Dense" Variant="Variant.Outlined" Label="Group by" Style="min-width:170px">
+            <MudSelectItem T="string" Value="@("none")">None</MudSelectItem>
+            <MudSelectItem T="string" Value="@("day")">Day</MudSelectItem>
+            <MudSelectItem T="string" Value="@("week")">Week</MudSelectItem>
+            <MudSelectItem T="string" Value="@("month")">Month</MudSelectItem>
+        </MudSelect>
+    </div>
 
     @if (entries is null)
     {
@@ -95,8 +108,37 @@ else
     else
     {
         <MudStack Spacing="2">
+            @{ string? renderedGroupKey = null; }
             @foreach (var entry in entries)
             {
+                // Group header: when grouping is on and this entry starts a new group on the
+                // page, render the band above it. Totals come from the server (full group, not
+                // the page slice) so they read consistently when a group spans pages.
+                if (groupBy != "none" && entry.GroupKey != renderedGroupKey)
+                {
+                    renderedGroupKey = entry.GroupKey;
+                    var summary = groups.FirstOrDefault(g => g.Key == entry.GroupKey);
+                    if (summary is not null)
+                    {
+                        <MudPaper Class="px-3 py-2 mb-1 d-flex justify-space-between align-center" Elevation="0" Outlined="true">
+                            <MudText Typo="Typo.subtitle2"><b>@summary.Label</b></MudText>
+                            <div class="d-flex align-center" style="gap:.75rem">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @FormatHours(summary.TotalMinutes) · @summary.EntryCount @(summary.EntryCount == 1 ? "entry" : "entries")
+                                </MudText>
+                                @if (summary.IssueCount > 0)
+                                {
+                                    <MudTooltip Text="Entries missing required fields">
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined"
+                                                 Icon="@Icons.Material.Filled.Warning">
+                                            @summary.IssueCount @(summary.IssueCount == 1 ? "issue" : "issues")
+                                        </MudChip>
+                                    </MudTooltip>
+                                }
+                            </div>
+                        </MudPaper>
+                    }
+                }
                 var missing = MissingLabels(entry);
                 var attrs = entry.Attributes.Where(a => !string.IsNullOrWhiteSpace(a.Value) && a.Value != "false").ToList();
                 // Header = Project / Task (bold). Prefer the first-class ProjectName (FK) over
@@ -215,6 +257,29 @@ else
     private IReadOnlyList<TaskDto>? tasks;
     private IReadOnlyList<ProjectPickerDto>? projects;
     private IReadOnlyList<TimeEntryDto>? entries;
+    private IReadOnlyList<TimeEntryGroupDto> groups = [];
+    private string groupBy = "none"; // "none" | "day" | "week" | "month"
+
+    private async Task OnGroupChanged(string value)
+    {
+        groupBy = value;
+        page = 1;
+        await GuardAsync(LoadEntriesAsync);
+    }
+
+    // "92" minutes → "1h 32m"; "60" → "1h"; "0" or null → "0m".
+    private static string FormatHours(int minutes)
+    {
+        if (minutes <= 0) return "0m";
+        var h = minutes / 60;
+        var m = minutes % 60;
+        return (h, m) switch
+        {
+            (0, _) => $"{m}m",
+            (_, 0) => $"{h}h",
+            _ => $"{h}h {m}m",
+        };
+    }
     private int selectedOrgId;
     private int page = 1;
     private int total;
@@ -305,14 +370,17 @@ else
 
     private async Task LoadEntriesAsync()
     {
-        var result = await Api.GetTimeEntriesAsync(selectedOrgId, page, PageSize);
+        var groupParam = groupBy == "none" ? null : groupBy;
+        var result = await Api.GetTimeEntriesAsync(selectedOrgId, page, PageSize, groupParam);
         entries = result.Items;
+        groups = result.Groups;
         total = result.Total;
         if (page > TotalPages)
         {
             page = TotalPages;
-            var clamped = await Api.GetTimeEntriesAsync(selectedOrgId, page, PageSize);
+            var clamped = await Api.GetTimeEntriesAsync(selectedOrgId, page, PageSize, groupParam);
             entries = clamped.Items;
+            groups = clamped.Groups;
             total = clamped.Total;
         }
     }

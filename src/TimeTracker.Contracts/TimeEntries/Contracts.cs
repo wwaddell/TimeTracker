@@ -50,6 +50,9 @@ public record CreateTimeEntryRequest
 public record TimeEntryAttributeDto(int FieldId, string Label, string? Value);
 
 /// <summary>A logged time entry returned to clients.</summary>
+/// <param name="GroupKey">When the list is grouped (?group=day|week|month), the key that puts this
+/// entry under one of <see cref="TimeEntriesPage.Groups"/>. Stable string like "2026-06-07",
+/// "2026-W23", or "2026-06". Empty when not grouping.</param>
 public record TimeEntryDto(
     long Id,
     DateOnly EntryDate,
@@ -63,4 +66,22 @@ public record TimeEntryDto(
     DateTime CreatedUtc,
     TimeEntrySource Source,
     bool SourceIsRecurring,
+    string GroupKey,
     IReadOnlyList<TimeEntryAttributeDto> Attributes);
+
+/// <summary>
+/// One group bucket on a grouped Log Time list. Stats are for the FULL group (not just the
+/// page slice) so the header reads consistently even when a group spans pages.
+/// </summary>
+public record TimeEntryGroupDto(string Key, string Label, int TotalMinutes, int EntryCount, int IssueCount);
+
+/// <summary>
+/// Paged time-entry list with optional grouping. When <c>group</c> wasn't asked for,
+/// <see cref="Groups"/> is empty and each entry's GroupKey is "".
+/// </summary>
+public record TimeEntriesPage(
+    IReadOnlyList<TimeEntryDto> Items,
+    int Page,
+    int PageSize,
+    int Total,
+    IReadOnlyList<TimeEntryGroupDto> Groups);
