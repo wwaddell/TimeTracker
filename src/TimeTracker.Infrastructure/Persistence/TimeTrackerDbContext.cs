@@ -43,14 +43,36 @@ public class TimeTrackerDbContext(DbContextOptions<TimeTrackerDbContext> options
 
         // Map every column to snake_case based on its CLR property name so the
         // schema matches the house naming style (note, entry_date, organization_id, ...).
+        // After snake_case, apply the house PK rule: every Id-style primary key gets the
+        // table's core name as a prefix (t_task.id → t_task.task_id, t_type_organization_role.id
+        // → t_type_organization_role.organization_role_id). FK column names are unaffected —
+        // they keep their property-derived name (user_id on t_time_entry stays user_id, even
+        // though it now points at t_user.user_id rather than t_user.id).
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
             foreach (var property in entityType.GetProperties())
             {
                 property.SetColumnName(ToSnakeCase(property.Name));
             }
+
+            var pk = entityType.FindPrimaryKey();
+            if (pk is { Properties.Count: 1 } && pk.Properties[0].Name == "Id")
+            {
+                var table = entityType.GetTableName();
+                if (!string.IsNullOrEmpty(table))
+                {
+                    pk.Properties[0].SetColumnName($"{StripTablePrefix(table)}_id");
+                }
+            }
         }
     }
+
+    // t_task → task, t_type_organization_role → organization_role. Used to derive the PK
+    // column name from the table name under the house convention (PK = <table>_id).
+    private static string StripTablePrefix(string tableName) =>
+        tableName.StartsWith("t_type_") ? tableName[7..]
+        : tableName.StartsWith("t_") ? tableName[2..]
+        : tableName;
 
     private static string ToSnakeCase(string name)
     {
