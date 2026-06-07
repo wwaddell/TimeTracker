@@ -32,6 +32,33 @@
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script>
+        // Hidden context auto-captured on every time entry. Timezone is always sent (IANA name,
+        // read off Intl). Location is only requested when the user has opted in on /me; if the
+        // browser denies, times out, or doesn't support it, location fields stay undefined.
+        window.ttContext = {
+            captureEntryContext: async function (includeLocation) {
+                const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone) || null;
+                const out = { timezone: tz };
+                if (!includeLocation || !navigator.geolocation) {
+                    return out;
+                }
+                try {
+                    const pos = await new Promise(function (resolve) {
+                        navigator.geolocation.getCurrentPosition(
+                            function (p) { resolve(p); },
+                            function () { resolve(null); }, // permission denied / unavailable → null
+                            { enableHighAccuracy: false, timeout: 4000, maximumAge: 60000 });
+                    });
+                    if (pos && pos.coords) {
+                        out.latitude = pos.coords.latitude;
+                        out.longitude = pos.coords.longitude;
+                        out.locationAccuracy = pos.coords.accuracy;
+                    }
+                } catch (_) { /* swallow — location is best-effort */ }
+                return out;
+            }
+        };
+
         // Enter submits the quick-add note; Shift/Ctrl/Alt+Enter inserts a newline instead.
         window.ttQuickAdd = {
             bind: function (selector, dotNetRef) {

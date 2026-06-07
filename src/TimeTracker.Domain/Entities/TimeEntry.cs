@@ -52,6 +52,18 @@ public class TimeEntry : AuditableEntity, ISoftDeletable
     /// <summary>The always-required base field: a note of what was completed.</summary>
     public string Note { get; set; } = string.Empty;
 
+    // --- Auto-captured context (opt-in via User.CaptureLocation). Hidden from the UI;
+    // intended for audit, dispute-resolution, and future "where did I do this" reports. ---
+
+    /// <summary>Latitude in WGS-84 decimal degrees if the browser provided it.</summary>
+    public double? Latitude { get; set; }
+    /// <summary>Longitude in WGS-84 decimal degrees if the browser provided it.</summary>
+    public double? Longitude { get; set; }
+    /// <summary>Geolocation accuracy in meters as reported by the browser.</summary>
+    public double? LocationAccuracy { get; set; }
+    /// <summary>IANA timezone name (e.g. <c>America/New_York</c>) of the client at create time.</summary>
+    public string? Timezone { get; set; }
+
     /// <summary>Set when soft-deleted; excluded from queries by a global filter.</summary>
     public DateTime? DeletedUtc { get; set; }
 

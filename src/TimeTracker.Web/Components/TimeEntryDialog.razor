@@ -46,6 +46,9 @@
     /// <summary>For a new entry, pre-link this task (e.g. "log time" from the Tasks page).</summary>
     [Parameter] public int? InitialTaskId { get; set; }
 
+    /// <summary>When true, the dialog asks the browser for location on save (new entries only).</summary>
+    [Parameter] public bool CaptureLocation { get; set; }
+
     private TimeEntryModel model = new();
     private TimeEntryFields entryFields = default!;
     private bool saving;
@@ -91,6 +94,24 @@
         try
         {
             var request = ToRequest();
+            // Auto-capture context for NEW entries only. Edits keep the original capture so
+            // "where did I do this" stays meaningful — re-saving from a different place doesn't
+            // overwrite it. The JS helper is best-effort and returns whatever the browser gives.
+            if (Entry is null)
+            {
+                try
+                {
+                    var ctx = await JS.InvokeAsync<EntryContextRaw>("ttContext.captureEntryContext", CaptureLocation);
+                    request = request with
+                    {
+                        Timezone = ctx.Timezone,
+                        Latitude = ctx.Latitude,
+                        Longitude = ctx.Longitude,
+                        LocationAccuracy = ctx.LocationAccuracy,
+                    };
+                }
+                catch { /* swallow — context capture is best-effort */ }
+            }
             var result = Entry is null
                 ? await Api.CreateTimeEntryAsync(OrgId, request)
                 : await Api.UpdateTimeEntryAsync(OrgId, Entry.Id, request);
@@ -180,4 +201,13 @@
         ProjectId = model.ProjectId,
         Attributes = new Dictionary<int, string?>(model.Attributes),
     };
+
+    /// <summary>Shape of the JSON returned by <c>window.ttContext.captureEntryContext</c>.</summary>
+    private class EntryContextRaw
+    {
+        public string? Timezone { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public double? LocationAccuracy { get; set; }
+    }
 }

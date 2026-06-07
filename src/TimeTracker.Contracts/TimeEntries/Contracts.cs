@@ -30,6 +30,18 @@ public record CreateTimeEntryRequest
     /// <summary>Optional first-class project this entry is logged against.</summary>
     public int? ProjectId { get; init; }
 
+    // --- Auto-captured context. Hidden from the UI. Sent by the client when the user
+    // has opted into location capture; the timezone is always sent. Server stores verbatim. ---
+
+    /// <summary>Latitude (WGS-84 decimal degrees) if the browser granted location.</summary>
+    public double? Latitude { get; init; }
+    /// <summary>Longitude (WGS-84 decimal degrees) if the browser granted location.</summary>
+    public double? Longitude { get; init; }
+    /// <summary>Geolocation accuracy in meters as reported by the browser.</summary>
+    public double? LocationAccuracy { get; init; }
+    /// <summary>IANA timezone name of the client at create time (e.g. <c>America/New_York</c>).</summary>
+    public string? Timezone { get; init; }
+
     /// <summary>Values for configurable fields, keyed by TimeEntryField Id.</summary>
     public Dictionary<int, string?> Attributes { get; init; } = new();
 }

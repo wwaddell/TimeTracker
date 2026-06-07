@@ -395,6 +395,7 @@ else
             { x => x.Entry, (TimeEntryDto?)null },
             { x => x.RequireTime, OrgRequiresTime },
             { x => x.InitialTaskId, (int?)task.Id },
+            { x => x.CaptureLocation, me?.CaptureLocation ?? false },
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
         var dialog = await DialogService.ShowAsync<TimeEntryDialog>($"Log time — {task.Title}", parameters, options);

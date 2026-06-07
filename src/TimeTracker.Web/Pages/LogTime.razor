@@ -333,11 +333,16 @@ else
         quickAdding = true;
         try
         {
+            var ctx = await CaptureContextAsync();
             var request = new CreateTimeEntryRequest
             {
                 Note = quickNote.Trim(),
                 EntryDate = DateOnly.FromDateTime(DateTime.Now),
                 StartTime = OrgRequiresTime ? TimeOnly.FromDateTime(DateTime.Now) : null,
+                Timezone = ctx.Timezone,
+                Latitude = ctx.Latitude,
+                Longitude = ctx.Longitude,
+                LocationAccuracy = ctx.LocationAccuracy,
             };
             var result = await Api.CreateTimeEntryAsync(selectedOrgId, request);
             if (result.Success)
@@ -372,6 +377,7 @@ else
             { x => x.Projects, projects ?? [] },
             { x => x.Entry, entry },
             { x => x.RequireTime, OrgRequiresTime },
+            { x => x.CaptureLocation, me?.CaptureLocation ?? false },
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
         var dialog = await DialogService.ShowAsync<TimeEntryDialog>(
@@ -420,5 +426,32 @@ else
             .Where(f => f.IsRequired && !filled.Contains(f.Id))
             .Select(f => f.Label)
             .ToList();
+    }
+
+    /// <summary>
+    /// Asks the browser for the hidden auto-capture context (always: timezone; opt-in: location).
+    /// Best-effort — if anything fails, returns nulls so the entry still saves.
+    /// </summary>
+    private async Task<EntryContext> CaptureContextAsync()
+    {
+        try
+        {
+            var includeLoc = me?.CaptureLocation ?? false;
+            var raw = await JS.InvokeAsync<EntryContextRaw>("ttContext.captureEntryContext", includeLoc);
+            return new EntryContext(raw.Timezone, raw.Latitude, raw.Longitude, raw.LocationAccuracy);
+        }
+        catch
+        {
+            return new EntryContext(null, null, null, null);
+        }
+    }
+
+    private readonly record struct EntryContext(string? Timezone, double? Latitude, double? Longitude, double? LocationAccuracy);
+    private class EntryContextRaw
+    {
+        public string? Timezone { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public double? LocationAccuracy { get; set; }
     }
 }

@@ -101,6 +101,22 @@
                     Drops the keyboard hint under Quick add and the "Recent entries" heading.
                 </MudText>
             </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSwitch T="bool" @bind-Value="captureLocation" Color="Color.Primary" Label="Capture location with entries" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Stores latitude/longitude on each new time entry (hidden from the UI; for audit/travel reports).
+                    Your browser will prompt you for permission the first time.
+                </MudText>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="int" @bind-Value="weekStartsOn" Label="Week starts on" Variant="Variant.Outlined" Dense="true">
+                    <MudSelectItem T="int" Value="0">Sunday</MudSelectItem>
+                    <MudSelectItem T="int" Value="1">Monday</MudSelectItem>
+                </MudSelect>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Used when grouping Log Time entries by week.
+                </MudText>
+            </MudItem>
         </MudGrid>
         <div class="d-flex justify-end mt-3">
             <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SavePreferencesAsync" Disabled="@(saving || !PreferencesDirty)">
@@ -209,13 +225,17 @@
     private bool hideOrgSwitcher;
     private bool darkMode;
     private bool compactMode;
+    private bool captureLocation;
+    private int weekStartsOn;
     private bool saving;
 
     private bool PreferencesDirty => me is not null && (
         defaultOrgId != (me.DefaultOrganizationId ?? 0)
         || hideOrgSwitcher != me.HideOrgSwitcher
         || darkMode != me.DarkMode
-        || compactMode != me.CompactMode);
+        || compactMode != me.CompactMode
+        || captureLocation != me.CaptureLocation
+        || weekStartsOn != me.WeekStartsOn);
 
     protected override async Task OnInitializedAsync()
     {
@@ -235,6 +255,8 @@
                 hideOrgSwitcher = me.HideOrgSwitcher;
                 darkMode = me.DarkMode;
                 compactMode = me.CompactMode;
+                captureLocation = me.CaptureLocation;
+                weekStartsOn = me.WeekStartsOn;
                 // Default-org dropdown: prefer the saved default; otherwise the first available org.
                 defaultOrgId = me.DefaultOrganizationId
                     ?? organizations.FirstOrDefault()?.Id
@@ -310,6 +332,8 @@
                 HideOrgSwitcher = hideOrgSwitcher,
                 DarkMode = darkMode,
                 CompactMode = compactMode,
+                CaptureLocation = captureLocation,
+                WeekStartsOn = weekStartsOn,
             });
             if (result.Success)
             {

@@ -132,6 +132,13 @@ public static class TimeEntryEndpoints
                 StartTime = request.StartTime,
                 DurationMinutes = request.DurationMinutes,
                 Note = request.Note.Trim(),
+                // Hidden context: stored verbatim from the client. Truncate timezone defensively.
+                Latitude = request.Latitude,
+                Longitude = request.Longitude,
+                LocationAccuracy = request.LocationAccuracy,
+                Timezone = string.IsNullOrWhiteSpace(request.Timezone)
+                    ? null
+                    : request.Timezone.Trim()[..Math.Min(request.Timezone.Trim().Length, 64)],
                 CreatedUtc = DateTime.UtcNow,
             };
 

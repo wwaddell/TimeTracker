@@ -21,6 +21,10 @@ public class TimeEntryConfiguration : IEntityTypeConfiguration<TimeEntry>
         builder.Property(x => x.SourceSeriesUid).HasMaxLength(512);
         builder.Property(x => x.SourceEventId).HasMaxLength(512);
 
+        // Hidden context captured opportunistically at entry creation time.
+        // Timezone holds an IANA name like "America/New_York" — 64 is generous.
+        builder.Property(x => x.Timezone).HasMaxLength(64);
+
         // Restrict user/org deletes so they don't form multiple cascade paths
         // into t_time_entry (and onward to t_time_entry_attribute).
         builder.HasOne(x => x.User)
