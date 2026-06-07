@@ -34,14 +34,6 @@ public class User : AuditableEntity
     public bool CompactMode { get; set; }
 
     /// <summary>
-    /// When true, the browser is asked for the user's location each time they create a time
-    /// entry; the lat/lng/accuracy are stored on the entry (hidden from the UI). Off by default;
-    /// the browser still prompts for OS-level permission the first time. Used for travel/audit
-    /// reports and "where did I do this" analysis.
-    /// </summary>
-    public bool CaptureLocation { get; set; }
-
-    /// <summary>
     /// First day of the week for "group by week" totals on Log Time. Defaults to Sunday (US).
     /// Stored as the .NET <see cref="DayOfWeek"/> int (Sunday=0..Saturday=6).
     /// </summary>

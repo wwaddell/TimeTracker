@@ -293,6 +293,13 @@ else
     private bool OrgRequiresTime =>
         organizations?.FirstOrDefault(o => o.Id == selectedOrgId)?.RequireTime ?? true;
 
+    /// <summary>
+    /// Selected-org policy for the hidden location-capture feature. The org's setting is the
+    /// authoritative source — there is no per-user toggle.
+    /// </summary>
+    private bool OrgCaptureLocation =>
+        organizations?.FirstOrDefault(o => o.Id == selectedOrgId)?.CaptureLocation ?? false;
+
     private DotNetObjectReference<LogTime>? _selfRef;
     private bool _quickEnterBound;
 
@@ -445,7 +452,7 @@ else
             { x => x.Projects, projects ?? [] },
             { x => x.Entry, entry },
             { x => x.RequireTime, OrgRequiresTime },
-            { x => x.CaptureLocation, me?.CaptureLocation ?? false },
+            { x => x.CaptureLocation, OrgCaptureLocation },
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
         var dialog = await DialogService.ShowAsync<TimeEntryDialog>(
@@ -504,7 +511,7 @@ else
     {
         try
         {
-            var includeLoc = me?.CaptureLocation ?? false;
+            var includeLoc = OrgCaptureLocation;
             var raw = await JS.InvokeAsync<EntryContextRaw>("ttContext.captureEntryContext", includeLoc);
             return new EntryContext(raw.Timezone, raw.Latitude, raw.Longitude, raw.LocationAccuracy);
         }

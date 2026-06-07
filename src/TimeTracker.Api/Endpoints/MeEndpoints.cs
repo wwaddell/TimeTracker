@@ -29,7 +29,7 @@ public static class MeEndpoints
                 .FirstOrDefaultAsync();
             return Results.Ok(new MeDto(user.Id, user.DisplayName, user.Email,
                 isGlobalAdmin, user.HideOrgSwitcher, user.DarkMode, user.CompactMode,
-                user.CaptureLocation, (int)user.WeekStartsOn, defaultOrgId));
+                (int)user.WeekStartsOn, defaultOrgId));
         });
 
         // Update the user's personal preferences (default org + show/hide org switcher).
@@ -70,7 +70,6 @@ public static class MeEndpoints
             if (request.HideOrgSwitcher is { } h && user.HideOrgSwitcher != h) { user.HideOrgSwitcher = h; changed = true; }
             if (request.DarkMode is { } d && user.DarkMode != d) { user.DarkMode = d; changed = true; }
             if (request.CompactMode is { } c && user.CompactMode != c) { user.CompactMode = c; changed = true; }
-            if (request.CaptureLocation is { } cl && user.CaptureLocation != cl) { user.CaptureLocation = cl; changed = true; }
             if (request.WeekStartsOn is { } w)
             {
                 if (w is < 0 or > 6)

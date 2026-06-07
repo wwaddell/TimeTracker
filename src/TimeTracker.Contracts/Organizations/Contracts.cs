@@ -15,4 +15,10 @@ public record SaveOrganizationRequest
 public record EntrySettingsRequest
 {
     public bool RequireTime { get; init; } = true;
+
+    /// <summary>
+    /// When true, the browser is asked for location on every new time entry in this org and
+    /// the coords are stored on the entry (hidden from the UI). Off by default.
+    /// </summary>
+    public bool CaptureLocation { get; init; }
 }

@@ -26,6 +26,7 @@ public static class TimeEntryEndpoints
                     m.OrganizationId,
                     m.Organization.Name,
                     m.Organization.RequireTime,
+                    m.Organization.CaptureLocation,
                     Roles = m.Roles.Select(r => r.OrganizationRole.Name).OrderBy(n => n).ToList(),
                 })
                 .ToListAsync();
@@ -34,7 +35,8 @@ public static class TimeEntryEndpoints
                 .Select(m => new OrganizationDto(
                     m.OrganizationId, m.Name,
                     m.Roles.Count > 0 ? string.Join(", ", m.Roles) : null,
-                    m.RequireTime))
+                    m.RequireTime,
+                    m.CaptureLocation))
                 .ToList();
 
             return Results.Ok(orgs);

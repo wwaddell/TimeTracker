@@ -10,7 +10,6 @@ public record MeDto(
     bool HideOrgSwitcher,
     bool DarkMode,
     bool CompactMode,
-    bool CaptureLocation,
     int WeekStartsOn,
     int? DefaultOrganizationId);
 
@@ -32,12 +31,6 @@ public record SaveMePreferencesRequest
 
     /// <summary>Compact (hint-free) layout for the Log Time page.</summary>
     public bool? CompactMode { get; init; }
-
-    /// <summary>
-    /// Whether to capture the browser's location (lat/lng/accuracy) on every new time entry.
-    /// Browser still prompts for OS-level permission the first time.
-    /// </summary>
-    public bool? CaptureLocation { get; init; }
 
     /// <summary>First day of the week (Sunday=0..Saturday=6); validated against valid DayOfWeek.</summary>
     public int? WeekStartsOn { get; init; }

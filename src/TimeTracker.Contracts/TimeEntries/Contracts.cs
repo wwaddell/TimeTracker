@@ -3,7 +3,7 @@ using TimeTracker.Domain.Enums;
 namespace TimeTracker.Contracts.TimeEntries;
 
 /// <summary>An organization the current user can log time for.</summary>
-public record OrganizationDto(int Id, string Name, string? RoleName, bool RequireTime = true);
+public record OrganizationDto(int Id, string Name, string? RoleName, bool RequireTime = true, bool CaptureLocation = false);
 
 /// <summary>An allowed value for a select-type configurable field.</summary>
 public record EntryFieldOptionDto(string Value, string Label, string? Icon = null);

@@ -102,13 +102,6 @@
                 </MudText>
             </MudItem>
             <MudItem xs="12" sm="6">
-                <MudSwitch T="bool" @bind-Value="captureLocation" Color="Color.Primary" Label="Capture location with entries" />
-                <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                    Stores latitude/longitude on each new time entry (hidden from the UI; for audit/travel reports).
-                    Your browser will prompt you for permission the first time.
-                </MudText>
-            </MudItem>
-            <MudItem xs="12" sm="6">
                 <MudSelect T="int" @bind-Value="weekStartsOn" Label="Week starts on" Variant="Variant.Outlined" Dense="true">
                     <MudSelectItem T="int" Value="0">Sunday</MudSelectItem>
                     <MudSelectItem T="int" Value="1">Monday</MudSelectItem>
@@ -225,7 +218,6 @@
     private bool hideOrgSwitcher;
     private bool darkMode;
     private bool compactMode;
-    private bool captureLocation;
     private int weekStartsOn;
     private bool saving;
 
@@ -234,7 +226,6 @@
         || hideOrgSwitcher != me.HideOrgSwitcher
         || darkMode != me.DarkMode
         || compactMode != me.CompactMode
-        || captureLocation != me.CaptureLocation
         || weekStartsOn != me.WeekStartsOn);
 
     protected override async Task OnInitializedAsync()
@@ -255,7 +246,6 @@
                 hideOrgSwitcher = me.HideOrgSwitcher;
                 darkMode = me.DarkMode;
                 compactMode = me.CompactMode;
-                captureLocation = me.CaptureLocation;
                 weekStartsOn = me.WeekStartsOn;
                 // Default-org dropdown: prefer the saved default; otherwise the first available org.
                 defaultOrgId = me.DefaultOrganizationId
@@ -332,7 +322,6 @@
                 HideOrgSwitcher = hideOrgSwitcher,
                 DarkMode = darkMode,
                 CompactMode = compactMode,
-                CaptureLocation = captureLocation,
                 WeekStartsOn = weekStartsOn,
             });
             if (result.Success)

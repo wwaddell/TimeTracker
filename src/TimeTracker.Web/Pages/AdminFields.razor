@@ -58,6 +58,14 @@ else
         <MudText Typo="Typo.caption" Class="mud-text-secondary">
             When off, entries capture the date only — the time field is hidden and time isn't shown in the list.
         </MudText>
+        <MudDivider Class="my-3" />
+        <MudSwitch T="bool" Value="captureLocation" ValueChanged="OnCaptureLocationChanged" Color="Color.Primary"
+                   Label="Capture location with entries" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+            When on, every new entry asks the browser for the user's location and stores
+            latitude/longitude on the entry (hidden from the UI; for audit/travel reports).
+            Browsers prompt members for OS-level permission the first time.
+        </MudText>
     </MudPaper>
 
     <div class="d-flex justify-space-between align-center mb-3">
@@ -108,6 +116,7 @@ else
     private IReadOnlyList<EntryFieldAdminDto>? fields;
     private int selectedOrgId;
     private bool requireTime = true;
+    private bool captureLocation;
     private string? infoMessage;
     private string? loadError;
 
@@ -135,7 +144,9 @@ else
 
     private async Task LoadAsync()
     {
-        requireTime = organizations?.FirstOrDefault(o => o.Id == selectedOrgId)?.RequireTime ?? true;
+        var org = organizations?.FirstOrDefault(o => o.Id == selectedOrgId);
+        requireTime = org?.RequireTime ?? true;
+        captureLocation = org?.CaptureLocation ?? false;
         roles = await Api.GetRolesAsync(selectedOrgId);
         fields = await Api.GetAdminFieldsAsync(selectedOrgId);
     }
@@ -143,15 +154,34 @@ else
     private async Task OnRequireTimeChanged(bool value)
     {
         requireTime = value;
-        var result = await Api.SaveEntrySettingsAsync(selectedOrgId, new EntrySettingsRequest { RequireTime = value });
+        // The PUT replaces all entry-settings, so send both flags together.
+        var result = await Api.SaveEntrySettingsAsync(selectedOrgId,
+            new EntrySettingsRequest { RequireTime = value, CaptureLocation = captureLocation });
         if (result.Success)
         {
             Snackbar.Add(value ? "Start time is now required" : "Entries are now date-only", Severity.Success);
-            organizations = await Api.GetOrganizationsAsync(); // refresh cached RequireTime
+            organizations = await Api.GetOrganizationsAsync(); // refresh cached settings
         }
         else
         {
             requireTime = !value; // revert on failure
+            Snackbar.Add(result.Error ?? "Could not update the setting.", Severity.Error);
+        }
+    }
+
+    private async Task OnCaptureLocationChanged(bool value)
+    {
+        captureLocation = value;
+        var result = await Api.SaveEntrySettingsAsync(selectedOrgId,
+            new EntrySettingsRequest { RequireTime = requireTime, CaptureLocation = value });
+        if (result.Success)
+        {
+            Snackbar.Add(value ? "Location will be captured with new entries" : "Location capture turned off", Severity.Success);
+            organizations = await Api.GetOrganizationsAsync();
+        }
+        else
+        {
+            captureLocation = !value;
             Snackbar.Add(result.Error ?? "Could not update the setting.", Severity.Error);
         }
     }
