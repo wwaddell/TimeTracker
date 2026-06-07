@@ -114,6 +114,15 @@ code {
     text-align: start;
 }
 
+/* Log Time group-header band. Tinted background + accent border so the period dividers
+   read clearly against the white entry cards on either side. Works in light + dark via
+   MudBlazor palette vars; text uses the default palette so contrast stays high. */
+.tt-group-header {
+    background: var(--mud-palette-primary-hover) !important; /* very light primary tint */
+    border-left: 3px solid var(--mud-palette-primary) !important;
+    border-radius: 4px;
+}
+
 /* Outlook-style tasks list — columnar first line + description that wraps the full row width. */
 .tt-tasks {
     --tt-col-pri: 24px;
