@@ -241,9 +241,17 @@ else
             }
         </MudStack>
 
-        <div class="d-flex justify-space-between align-center mt-4">
-            <MudText Typo="Typo.caption" Class="mud-text-secondary">@total @(total == 1 ? "entry" : "entries")</MudText>
-            <MudPagination Count="@TotalPages" Selected="page" SelectedChanged="OnPageChanged" Color="Color.Primary" />
+        @* Gmail-style pager: no total count (a SELECT COUNT(*) on every load would scale poorly),
+           just Page N + Prev/Next. The "of many" sentinel appears only when there's a next page. *@
+        <div class="d-flex justify-end align-center mt-4" style="gap:.5rem">
+            @* Wrap @page in parens — bare @page is parsed as the Razor @page directive. *@
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Page @(page)@(hasMore ? " of many" : "")
+            </MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Small"
+                           Disabled="@(page <= 1)" OnClick="@(() => OnPageChanged(page - 1))" aria-label="Previous page" />
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small"
+                           Disabled="@(!hasMore)" OnClick="@(() => OnPageChanged(page + 1))" aria-label="Next page" />
         </div>
     }
 }
@@ -282,13 +290,11 @@ else
     }
     private int selectedOrgId;
     private int page = 1;
-    private int total;
+    private bool hasMore; // Gmail-style: true when there's a next page; replaces total/TotalPages
 
     private string quickNote = string.Empty;
     private bool quickAdding;
     private string? loadError;
-
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(total / (double)PageSize));
 
     private bool OrgRequiresTime =>
         organizations?.FirstOrDefault(o => o.Id == selectedOrgId)?.RequireTime ?? true;
@@ -381,14 +387,18 @@ else
         var result = await Api.GetTimeEntriesAsync(selectedOrgId, page, PageSize, groupParam);
         entries = result.Items;
         groups = result.Groups;
-        total = result.Total;
-        if (page > TotalPages)
+        hasMore = result.HasMore;
+
+        // We don't know the total page count (no SELECT COUNT(*) — Gmail-style). Detect the
+        // "landed on an empty page" case (e.g. the last row on page 5 got deleted while we
+        // were on page 5) and walk back to page 1 with a single follow-up fetch.
+        if (entries.Count == 0 && page > 1)
         {
-            page = TotalPages;
-            var clamped = await Api.GetTimeEntriesAsync(selectedOrgId, page, PageSize, groupParam);
-            entries = clamped.Items;
-            groups = clamped.Groups;
-            total = clamped.Total;
+            page = 1;
+            var first = await Api.GetTimeEntriesAsync(selectedOrgId, page, PageSize, groupParam);
+            entries = first.Items;
+            groups = first.Groups;
+            hasMore = first.HasMore;
         }
     }
 

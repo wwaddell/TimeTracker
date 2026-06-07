@@ -79,9 +79,14 @@ public record TimeEntryGroupDto(string Key, string Label, int TotalMinutes, int 
 /// Paged time-entry list with optional grouping. When <c>group</c> wasn't asked for,
 /// <see cref="Groups"/> is empty and each entry's GroupKey is "".
 /// </summary>
+/// <param name="HasMore">
+/// True when there's at least one more page after this one. Detected by fetching
+/// pageSize+1 rows server-side — no <c>COUNT(*)</c> query is run. Gmail-style: callers show
+/// "Page N" + Prev/Next instead of a total/numbered pager, which scales to millions of rows.
+/// </param>
 public record TimeEntriesPage(
     IReadOnlyList<TimeEntryDto> Items,
     int Page,
     int PageSize,
-    int Total,
+    bool HasMore,
     IReadOnlyList<TimeEntryGroupDto> Groups);

@@ -82,15 +82,22 @@ public static class TimeEntryEndpoints
             var grouping = ParseGrouping(group);
 
             var baseQuery = db.TimeEntries.Where(e => e.OrganizationId == orgId && e.UserId == userId);
-            var total = await baseQuery.CountAsync();
 
+            // Gmail-style "of many" paging: fetch size+1 rows and use the overflow as the
+            // hasMore signal. No COUNT(*) — this is the win at tens-of-thousands of entries.
+            // Trade-off: caller can't jump to an arbitrary page number, only Prev/Next.
             // Materialize just the dates+ids needed for the page so we can compute group keys
             // without round-tripping the heavy projection twice.
             var pageRows = await baseQuery
                 .OrderByDescending(e => e.EntryDate).ThenByDescending(e => e.Id)
-                .Skip((p - 1) * size).Take(size)
+                .Skip((p - 1) * size).Take(size + 1)
                 .Select(e => new { e.Id, e.EntryDate })
                 .ToListAsync();
+            var hasMore = pageRows.Count > size;
+            if (hasMore)
+            {
+                pageRows.RemoveAt(pageRows.Count - 1); // drop the probe row
+            }
             var pageIds = pageRows.Select(r => r.Id).ToList();
 
             // For week grouping we need the user's preferred week start.
@@ -127,7 +134,7 @@ public static class TimeEntryEndpoints
             // No grouping → just return the page.
             if (grouping == Grouping.None)
             {
-                return Results.Ok(new TimeEntriesPage(withKeys, p, size, total, []));
+                return Results.Ok(new TimeEntriesPage(withKeys, p, size, hasMore, []));
             }
 
             // Compute the date ranges covered by the visible groups, then load ALL entries
@@ -176,7 +183,7 @@ public static class TimeEntryEndpoints
                 .OrderByDescending(g => g.Key)
                 .ToList();
 
-            return Results.Ok(new TimeEntriesPage(withKeys, p, size, total, groups));
+            return Results.Ok(new TimeEntriesPage(withKeys, p, size, hasMore, groups));
         });
 
         static Grouping ParseGrouping(string? g) => g?.ToLowerInvariant() switch

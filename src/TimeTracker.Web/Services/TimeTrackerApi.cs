@@ -36,7 +36,7 @@ public class TimeTrackerApi(HttpClient http)
         var url = $"/api/organizations/{orgId}/time-entries?page={page}&pageSize={pageSize}"
             + (string.IsNullOrEmpty(group) ? "" : $"&group={Uri.EscapeDataString(group)}");
         return await GetAsync<TimeEntriesPage>(url)
-            ?? new TimeEntriesPage([], page, pageSize, 0, []);
+            ?? new TimeEntriesPage([], page, pageSize, false, []);
     }
 
     public async Task<ApiResult> CreateTimeEntryAsync(int orgId, CreateTimeEntryRequest request) =>
