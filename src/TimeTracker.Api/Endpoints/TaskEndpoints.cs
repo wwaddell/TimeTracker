@@ -166,6 +166,40 @@ public static class TaskEndpoints
             await db.SaveChangesAsync();
             return Results.NoContent();
         });
+
+        // History: every create/edit/soft-delete on a task is appended automatically by the
+        // DbContext's SaveChanges override (see TimeTrackerDbContext.SaveChangesAsync). This
+        // endpoint just reads them newest-first. Same visibility rule as PUT/DELETE: only the
+        // creator or current assignee can see the trail. IgnoreQueryFilters so a soft-deleted
+        // task's history is still readable (you may want to see WHO deleted it).
+        api.MapGet("/api/organizations/{orgId:int}/tasks/{id:int}/history", async (
+            int orgId, int id, TimeTrackerDbContext db, ICurrentUser currentUser) =>
+        {
+            var userId = await currentUser.GetUserIdAsync();
+            var task = await db.Tasks.IgnoreQueryFilters().FirstOrDefaultAsync(t =>
+                t.Id == id && t.OrganizationId == orgId
+                && (t.UserId == userId || t.AssignedToUserId == userId));
+            if (task is null)
+            {
+                return Results.NotFound();
+            }
+
+            var rows = await db.TaskHistories
+                .Where(h => h.TaskId == id)
+                .OrderByDescending(h => h.ChangedUtc).ThenByDescending(h => h.Id)
+                .Select(h => new TaskHistoryDto(
+                    h.Id,
+                    h.ChangedUtc,
+                    h.ChangedByUserId,
+                    h.ChangedBy != null ? h.ChangedBy.DisplayName : null,
+                    h.ChangeType.ToString(),
+                    h.FieldName,
+                    h.OldValue,
+                    h.NewValue))
+                .ToListAsync();
+
+            return Results.Ok(rows);
+        });
     }
 
     private static IResult? Validate(SaveTaskRequest req)

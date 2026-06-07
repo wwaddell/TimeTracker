@@ -8,6 +8,10 @@
 
 <MudDialog>
     <DialogContent>
+        @* Tabs: Details (always) + History (only when editing an existing task — there's no
+           history for a not-yet-created task). Loading the history happens on tab activation. *@
+        <MudTabs Elevation="0" Rounded="true" KeepPanelsAlive="true" ActivePanelIndexChanged="OnTabChanged">
+            <MudTabPanel Text="Details" Icon="@Icons.Material.Filled.Edit">
         <MudTextField T="string" Label="Title" @bind-Value="title" Required="true"
                       Variant="Variant.Outlined" Class="mb-3" />
         <MudTextField T="string" Label="Description" @bind-Value="description" Lines="2"
@@ -72,6 +76,39 @@
         {
             <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@error</MudAlert>
         }
+            </MudTabPanel>
+            @if (Existing is not null)
+            {
+                <MudTabPanel Text="History" Icon="@Icons.Material.Filled.History">
+                    @if (history is null)
+                    {
+                        <MudProgressLinear Indeterminate="true" />
+                    }
+                    else if (history.Count == 0)
+                    {
+                        <MudText Class="mud-text-secondary">No history yet.</MudText>
+                    }
+                    else
+                    {
+                        <MudStack Spacing="1">
+                            @foreach (var h in history)
+                            {
+                                <MudPaper Outlined="true" Class="pa-2 d-flex align-center" Elevation="0" Style="gap:.6rem">
+                                    <MudIcon Icon="@HistoryIcon(h.ChangeType)" Color="@HistoryColor(h.ChangeType)" Size="Size.Small" />
+                                    <div class="flex-grow-1" style="min-width:0">
+                                        <MudText Typo="Typo.body2">@HistoryLine(h)</MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            @h.ChangedUtc.ToLocalTime().ToString("MMM d, yyyy · HH:mm")
+                                            @(h.ChangedByName is null ? " · system" : $" · {h.ChangedByName}")
+                                        </MudText>
+                                    </div>
+                                </MudPaper>
+                            }
+                        </MudStack>
+                    }
+                </MudTabPanel>
+            }
+        </MudTabs>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Cancel</MudButton>
@@ -196,4 +233,78 @@
     }
 
     private void Cancel() => MudDialog.Cancel();
+
+    // --- History tab ---
+    // Lazy-loaded once on first activation. KeepPanelsAlive on the parent MudTabs keeps the
+    // list around for subsequent tab switches without re-fetching.
+    private IReadOnlyList<TaskHistoryDto>? history;
+
+    private async Task OnTabChanged(int index)
+    {
+        if (index == 1 && history is null && Existing is not null)
+        {
+            try
+            {
+                history = await Api.GetTaskHistoryAsync(OrgId, Existing.Id);
+            }
+            catch
+            {
+                history = []; // soft-fail; the empty-state message renders
+            }
+        }
+    }
+
+    private static string HistoryIcon(string type) => type switch
+    {
+        "Created" => Icons.Material.Filled.AddCircleOutline,
+        "Updated" => Icons.Material.Filled.Edit,
+        "Deleted" => Icons.Material.Filled.DeleteOutline,
+        "Restored" => Icons.Material.Filled.RestoreFromTrash,
+        _ => Icons.Material.Filled.Circle,
+    };
+
+    private static Color HistoryColor(string type) => type switch
+    {
+        "Created" => Color.Success,
+        "Updated" => Color.Info,
+        "Deleted" => Color.Error,
+        "Restored" => Color.Warning,
+        _ => Color.Default,
+    };
+
+    private static string HistoryLine(TaskHistoryDto h) => h.ChangeType switch
+    {
+        "Created" => "Task created",
+        "Deleted" => "Task deleted",
+        "Restored" => "Task restored",
+        "Updated" => h.FieldName switch
+        {
+            null => "Updated",
+            _ => $"{Humanize(h.FieldName)}: {Display(h.OldValue)} → {Display(h.NewValue)}",
+        },
+        _ => h.ChangeType,
+    };
+
+    // "AssignedToUserId" → "Assigned to user id". Cheap and good enough for now; could map
+    // a few CLR names to friendlier labels (e.g. "AssignedToUserId" → "Assignee") if needed.
+    private static string Humanize(string camel)
+    {
+        if (string.IsNullOrEmpty(camel)) return camel;
+        var sb = new System.Text.StringBuilder(camel.Length + 4);
+        for (var i = 0; i < camel.Length; i++)
+        {
+            if (i > 0 && char.IsUpper(camel[i]) && !char.IsUpper(camel[i - 1]))
+            {
+                sb.Append(' ');
+                sb.Append(char.ToLowerInvariant(camel[i]));
+            }
+            else
+            {
+                sb.Append(i == 0 ? camel[i] : char.ToLowerInvariant(camel[i]));
+            }
+        }
+        return sb.ToString();
+    }
+
+    private static string Display(string? v) => string.IsNullOrEmpty(v) ? "(empty)" : v;
 }

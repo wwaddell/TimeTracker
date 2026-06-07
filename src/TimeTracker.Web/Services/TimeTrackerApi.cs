@@ -92,6 +92,9 @@ public class TimeTrackerApi(HttpClient http)
     public async Task<ApiResult> DeleteTaskAsync(int orgId, int id) =>
         await SendAsync(() => http.DeleteAsync($"/api/organizations/{orgId}/tasks/{id}"));
 
+    public async Task<IReadOnlyList<TaskHistoryDto>> GetTaskHistoryAsync(int orgId, int taskId) =>
+        await GetAsync<List<TaskHistoryDto>>($"/api/organizations/{orgId}/tasks/{taskId}/history") ?? [];
+
     // --- Admin: configurable fields ---
 
     public async Task<IReadOnlyList<OrganizationRoleDto>> GetRolesAsync(int orgId) =>

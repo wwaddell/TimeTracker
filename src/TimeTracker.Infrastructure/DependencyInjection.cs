@@ -20,6 +20,11 @@ public static class DependencyInjection
             options.UseSqlServer(connectionString, sql =>
                 sql.MigrationsAssembly(typeof(TimeTrackerDbContext).Assembly.FullName)));
 
+        // Audit attribution: callers (the API) replace this with a real provider that
+        // pulls the user from HttpContext. AddScoped here is the default — TryAddScoped
+        // would also work; using Add so registrations later in the chain can override.
+        services.AddScoped<ICurrentUserProvider, NullCurrentUserProvider>();
+
         return services;
     }
 }

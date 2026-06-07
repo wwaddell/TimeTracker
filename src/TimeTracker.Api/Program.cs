@@ -16,6 +16,10 @@ builder.Services.AddProblemDetails();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+// Bridge the API's HTTP-aware ICurrentUser into the infrastructure-layer provider so the
+// DbContext can attribute audit rows (t_task_history) without referencing this project.
+builder.Services.AddScoped<TimeTracker.Infrastructure.Persistence.ICurrentUserProvider,
+    TimeTracker.Api.Auth.CurrentUserProviderAdapter>();
 
 // Calendar import reads Outlook via Microsoft Graph, server-to-server, with a per-call token.
 builder.Services.AddHttpClient<ICalendarSource, GraphCalendarSource>(client =>

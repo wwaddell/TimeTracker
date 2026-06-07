@@ -58,3 +58,18 @@ public record SaveTaskRequest
     /// </summary>
     public int AssignedToUserId { get; init; }
 }
+
+/// <summary>One change event in a task's audit history (newest-first when listed).</summary>
+/// <param name="ChangeType">"Created" | "Updated" | "Deleted" | "Restored".</param>
+/// <param name="FieldName">CLR property name on TaskItem for Updated rows; null for markers.</param>
+/// <param name="OldValue">Stringified previous value; null for markers or null-to-X transitions.</param>
+/// <param name="NewValue">Stringified new value; null for markers or X-to-null transitions.</param>
+public record TaskHistoryDto(
+    long Id,
+    DateTime ChangedUtc,
+    int? ChangedByUserId,
+    string? ChangedByName,
+    string ChangeType,
+    string? FieldName,
+    string? OldValue,
+    string? NewValue);
