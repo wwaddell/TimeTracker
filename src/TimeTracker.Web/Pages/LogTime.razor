@@ -296,6 +296,10 @@ else
     private bool OrgRequiresTime =>
         organizations?.FirstOrDefault(o => o.Id == selectedOrgId)?.RequireTime ?? true;
 
+    /// <summary>Org policy: when on, entries must have a project.</summary>
+    private bool OrgRequiresProject =>
+        organizations?.FirstOrDefault(o => o.Id == selectedOrgId)?.RequireProject ?? false;
+
     /// <summary>
     /// Selected-org policy for the hidden location-capture feature. The org's setting is the
     /// authoritative source — there is no per-user toggle.
@@ -459,6 +463,7 @@ else
             { x => x.Projects, projects ?? [] },
             { x => x.Entry, entry },
             { x => x.RequireTime, OrgRequiresTime },
+            { x => x.RequireProject, OrgRequiresProject },
             { x => x.CaptureLocation, OrgCaptureLocation },
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };

@@ -347,6 +347,10 @@ else
     private bool OrgCaptureLocation =>
         organizations?.FirstOrDefault(o => o.Id == selectedOrgId)?.CaptureLocation ?? false;
 
+    /// <summary>Org policy: when on, entries must have a project (passed to TimeEntryDialog).</summary>
+    private bool OrgRequiresProject =>
+        organizations?.FirstOrDefault(o => o.Id == selectedOrgId)?.RequireProject ?? false;
+
     // Active-only + search filter, applied client-side over the loaded list.
     private IEnumerable<TaskDto> Filtered => (tasks ?? Enumerable.Empty<TaskDto>())
         .Where(t => showAll || !t.IsComplete)
@@ -460,6 +464,7 @@ else
             { x => x.Projects, projects ?? [] },
             { x => x.Entry, (TimeEntryDto?)null },
             { x => x.RequireTime, OrgRequiresTime },
+            { x => x.RequireProject, OrgRequiresProject },
             { x => x.InitialTaskId, (int?)task.Id },
             { x => x.CaptureLocation, OrgCaptureLocation },
         };

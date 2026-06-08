@@ -28,8 +28,12 @@
 
 @if (Projects is { Count: > 0 })
 {
-    <MudSelect T="int?" Label="Project" Value="Model.ProjectId" ValueChanged="OnProjectChanged" Clearable="true"
-               Variant="Variant.Outlined" Class="mt-3" Placeholder="No project">
+    @* When the org requires a project, drop the Clearable affordance so the user can't go
+       back to "no project" — and visually mark it required. Server still validates. *@
+    <MudSelect T="int?" Label="Project" Value="Model.ProjectId" ValueChanged="OnProjectChanged"
+               Clearable="@(!RequireProject)" Required="@RequireProject"
+               Variant="Variant.Outlined" Class="mt-3"
+               Placeholder="@(RequireProject ? "Select a project" : "No project")">
         @foreach (var p in Projects)
         {
             <MudSelectItem T="int?" Value="@((int?)p.Id)">@p.Name</MudSelectItem>
@@ -148,6 +152,10 @@
 
     /// <summary>When false, the org captures date only — the time field is hidden and cleared.</summary>
     [Parameter] public bool RequireTime { get; set; } = true;
+
+    /// <summary>When true, the org requires a Project on every entry; the picker drops its
+    /// Clearable affordance and shows a Required marker. Server validates regardless.</summary>
+    [Parameter] public bool RequireProject { get; set; }
 
     // Editable copy of the selected task's completion %, kept in sync with the picker.
     private int taskPercent;

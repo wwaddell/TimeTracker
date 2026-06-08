@@ -27,6 +27,7 @@ public static class TimeEntryEndpoints
                     m.Organization.Name,
                     m.Organization.RequireTime,
                     m.Organization.CaptureLocation,
+                    m.Organization.RequireProject,
                     Roles = m.Roles.Select(r => r.OrganizationRole.Name).OrderBy(n => n).ToList(),
                 })
                 .ToListAsync();
@@ -36,7 +37,8 @@ public static class TimeEntryEndpoints
                     m.OrganizationId, m.Name,
                     m.Roles.Count > 0 ? string.Join(", ", m.Roles) : null,
                     m.RequireTime,
-                    m.CaptureLocation))
+                    m.CaptureLocation,
+                    m.RequireProject))
                 .ToList();
 
             return Results.Ok(orgs);
@@ -248,10 +250,20 @@ public static class TimeEntryEndpoints
 
             var userId = await currentUser.GetUserIdAsync();
             var membership = await db.UserOrganizations
+                .Include(m => m.Organization)
                 .FirstOrDefaultAsync(m => m.UserId == userId && m.OrganizationId == orgId);
             if (membership is null)
             {
                 return Results.Forbid();
+            }
+
+            // Org policy: if RequireProject is on, the FK is mandatory.
+            if (membership.Organization.RequireProject && request.ProjectId is null)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["projectId"] = ["A project is required for this organization."],
+                });
             }
 
             // Only accept attribute values for fields that belong to this org.
@@ -312,6 +324,17 @@ public static class TimeEntryEndpoints
             if (entry is null)
             {
                 return Results.NotFound();
+            }
+
+            // Org policy: if RequireProject is on, the FK is mandatory on saves too.
+            var requireProject = await db.Organizations
+                .Where(o => o.Id == orgId).Select(o => o.RequireProject).FirstAsync();
+            if (requireProject && request.ProjectId is null)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["projectId"] = ["A project is required for this organization."],
+                });
             }
 
             entry.TaskId = request.TaskId;

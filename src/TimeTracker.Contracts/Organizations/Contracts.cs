@@ -21,4 +21,10 @@ public record EntrySettingsRequest
     /// the coords are stored on the entry (hidden from the UI). Off by default.
     /// </summary>
     public bool CaptureLocation { get; init; }
+
+    /// <summary>
+    /// When true, time entries must link to a Project. API rejects entries without a
+    /// project_id; the entry form marks the picker as required. Off by default.
+    /// </summary>
+    public bool RequireProject { get; init; }
 }

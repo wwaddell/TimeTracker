@@ -59,6 +59,14 @@ else
             When off, entries capture the date only — the time field is hidden and time isn't shown in the list.
         </MudText>
         <MudDivider Class="my-3" />
+        <MudSwitch T="bool" Value="requireProject" ValueChanged="OnRequireProjectChanged" Color="Color.Primary"
+                   Label="Require a project on entries" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+            When on, members must pick a project for every time entry. Project is a first-class
+            field (not part of the configurable fields below); it's listed here because it's the
+            only knob admins have over it.
+        </MudText>
+        <MudDivider Class="my-3" />
         <MudSwitch T="bool" Value="captureLocation" ValueChanged="OnCaptureLocationChanged" Color="Color.Primary"
                    Label="Capture location with entries" />
         <MudText Typo="Typo.caption" Class="mud-text-secondary">
@@ -131,6 +139,7 @@ else
     private int selectedOrgId;
     private bool requireTime = true;
     private bool captureLocation;
+    private bool requireProject;
     private string? infoMessage;
     private string? loadError;
 
@@ -161,16 +170,25 @@ else
         var org = organizations?.FirstOrDefault(o => o.Id == selectedOrgId);
         requireTime = org?.RequireTime ?? true;
         captureLocation = org?.CaptureLocation ?? false;
+        requireProject = org?.RequireProject ?? false;
         roles = await Api.GetRolesAsync(selectedOrgId);
         fields = await Api.GetAdminFieldsAsync(selectedOrgId);
     }
 
+    // PUT /entry-settings is authoritative — every toggle sends all three current values so
+    // a stale request can't accidentally turn another setting off.
+    private EntrySettingsRequest CurrentSettings(bool? requireTimeOverride = null,
+        bool? captureLocationOverride = null, bool? requireProjectOverride = null) => new()
+    {
+        RequireTime = requireTimeOverride ?? requireTime,
+        CaptureLocation = captureLocationOverride ?? captureLocation,
+        RequireProject = requireProjectOverride ?? requireProject,
+    };
+
     private async Task OnRequireTimeChanged(bool value)
     {
         requireTime = value;
-        // The PUT replaces all entry-settings, so send both flags together.
-        var result = await Api.SaveEntrySettingsAsync(selectedOrgId,
-            new EntrySettingsRequest { RequireTime = value, CaptureLocation = captureLocation });
+        var result = await Api.SaveEntrySettingsAsync(selectedOrgId, CurrentSettings(requireTimeOverride: value));
         if (result.Success)
         {
             Snackbar.Add(value ? "Start time is now required" : "Entries are now date-only", Severity.Success);
@@ -183,11 +201,26 @@ else
         }
     }
 
+    private async Task OnRequireProjectChanged(bool value)
+    {
+        requireProject = value;
+        var result = await Api.SaveEntrySettingsAsync(selectedOrgId, CurrentSettings(requireProjectOverride: value));
+        if (result.Success)
+        {
+            Snackbar.Add(value ? "A project is now required on entries" : "Project is now optional on entries", Severity.Success);
+            organizations = await Api.GetOrganizationsAsync();
+        }
+        else
+        {
+            requireProject = !value;
+            Snackbar.Add(result.Error ?? "Could not update the setting.", Severity.Error);
+        }
+    }
+
     private async Task OnCaptureLocationChanged(bool value)
     {
         captureLocation = value;
-        var result = await Api.SaveEntrySettingsAsync(selectedOrgId,
-            new EntrySettingsRequest { RequireTime = requireTime, CaptureLocation = value });
+        var result = await Api.SaveEntrySettingsAsync(selectedOrgId, CurrentSettings(captureLocationOverride: value));
         if (result.Success)
         {
             Snackbar.Add(value ? "Location will be captured with new entries" : "Location capture turned off", Severity.Success);

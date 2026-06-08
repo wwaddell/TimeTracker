@@ -11,6 +11,10 @@ public class Organization : AuditableEntity
     /// <summary>When true, entries capture a start time; when false, date-only (time hidden).</summary>
     public bool RequireTime { get; set; } = true;
 
+    /// <summary>When true, time entries must link to a Project (FK). API rejects entries without
+    /// a project_id; the entry form marks the picker as required.</summary>
+    public bool RequireProject { get; set; }
+
     /// <summary>
     /// When true, the browser is asked for the user's location every time a member creates a
     /// time entry for this org; lat/lng/accuracy are stored on the entry (hidden from the UI).

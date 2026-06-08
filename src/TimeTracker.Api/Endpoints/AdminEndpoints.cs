@@ -49,9 +49,10 @@ public static class AdminEndpoints
 
             org.RequireTime = req.RequireTime;
             org.CaptureLocation = req.CaptureLocation;
+            org.RequireProject = req.RequireProject;
             org.ModifiedUtc = DateTime.UtcNow;
             await db.SaveChangesAsync();
-            return Results.Ok(new { org.Id, org.RequireTime, org.CaptureLocation });
+            return Results.Ok(new { org.Id, org.RequireTime, org.CaptureLocation, org.RequireProject });
         });
 
         // All configurable fields for the org (including inactive, all roles).

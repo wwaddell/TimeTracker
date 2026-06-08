@@ -9,7 +9,7 @@
 <MudDialog>
     <DialogContent>
         <TimeEntryFields @ref="entryFields" Model="model" Fields="Fields" Tasks="Tasks" Projects="Projects"
-                         OrgId="OrgId" RequireTime="RequireTime" />
+                         OrgId="OrgId" RequireTime="RequireTime" RequireProject="RequireProject" />
         @if (Entry is not null && MissingRequired() is { Count: > 0 } missing)
         {
             <MudAlert Severity="Severity.Info" Class="mt-3" Dense="true">
@@ -42,6 +42,9 @@
     [Parameter] public IReadOnlyList<ProjectPickerDto> Projects { get; set; } = [];
     [Parameter] public TimeEntryDto? Entry { get; set; }
     [Parameter] public bool RequireTime { get; set; } = true;
+
+    /// <summary>Org policy: project picker on the entry form is required, not optional.</summary>
+    [Parameter] public bool RequireProject { get; set; }
 
     /// <summary>For a new entry, pre-link this task (e.g. "log time" from the Tasks page).</summary>
     [Parameter] public int? InitialTaskId { get; set; }
