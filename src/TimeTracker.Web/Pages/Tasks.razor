@@ -227,8 +227,10 @@ else
                         </div>
                         @if (!string.IsNullOrWhiteSpace(t.Description))
                         {
-                            @* Wraps across the full row width, indented under the priority column to align with the title. *@
-                            <div class="tt-tasks__preview">@t.Description</div>
+                            @* Wraps across the full row width, indented under the priority column to align with the title.
+                               Truncated to 500 chars in the grid to keep rows comfortable; full text is on the edit
+                               dialog (and as a title-attribute tooltip for hover). *@
+                            <div class="tt-tasks__preview" title="@t.Description">@TruncateForPreview(t.Description)</div>
                         }
                     </div>
                 }
@@ -438,6 +440,15 @@ else
 
     private static bool IsOverdue(DateOnly due, bool isComplete) =>
         !isComplete && due < DateOnly.FromDateTime(DateTime.Today);
+
+    // Grid preview cap. The DB stores up to 2000 chars; rendering all of them inline blows up
+    // row height. 500 covers the typical short paragraph; longer pastes get an ellipsis +
+    // a full-text hover tooltip; the edit dialog shows everything either way.
+    private const int PreviewMaxChars = 500;
+    private static string? TruncateForPreview(string? text) =>
+        string.IsNullOrEmpty(text) || text.Length <= PreviewMaxChars
+            ? text
+            : text[..PreviewMaxChars].TrimEnd() + "…";
 
     private async Task GuardAsync(Func<Task> action)
     {

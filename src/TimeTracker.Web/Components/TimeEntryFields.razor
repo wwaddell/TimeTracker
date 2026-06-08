@@ -6,6 +6,7 @@
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
 
 <MudTextField T="string" Label="Note" @bind-Value="Model.Note" Lines="2" AutoGrow="true" MaxLines="12"
+              MaxLength="2000" Counter="2000"
               Required="true" Immediate="true" Variant="Variant.Outlined" Class="mb-3"
               Placeholder="What did you work on?" />
 

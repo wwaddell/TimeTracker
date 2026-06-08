@@ -11,8 +11,9 @@ public class TimeEntryConfiguration : IEntityTypeConfiguration<TimeEntry>
         builder.ToTable("t_time_entry");
         builder.HasKey(x => x.Id);
 
-        // The always-required base field; allow long free text.
-        builder.Property(x => x.Note).IsRequired();
+        // The always-required base field; capped so the UI MaxLength and API validation
+        // line up with the DB column and a single misuse can't store a 1MB blob.
+        builder.Property(x => x.Note).IsRequired().HasMaxLength(2000);
         builder.Property(x => x.EntryDate).HasColumnType("date");
         builder.Property(x => x.StartTime).HasColumnType("time");
 

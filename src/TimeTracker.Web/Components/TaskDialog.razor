@@ -12,9 +12,13 @@
            history for a not-yet-created task). Loading the history happens on tab activation. *@
         <MudTabs Elevation="0" Rounded="true" KeepPanelsAlive="true" ActivePanelIndexChanged="OnTabChanged">
             <MudTabPanel Text="Details" Icon="@Icons.Material.Filled.Edit">
+        @* Lengths mirror TaskItemConfiguration HasMaxLength so the browser caps input before
+           the API gets a chance to reject it. Counter shows remaining chars as you type. *@
         <MudTextField T="string" Label="Title" @bind-Value="title" Required="true"
+                      MaxLength="200" Counter="200"
                       Variant="Variant.Outlined" Class="mb-3" />
         <MudTextField T="string" Label="Description" @bind-Value="description" Lines="2"
+                      MaxLength="2000" Counter="2000"
                       AutoGrow="true" MaxLines="10" Variant="Variant.Outlined" Class="mb-3" />
         @if (Projects is { Count: > 0 })
         {

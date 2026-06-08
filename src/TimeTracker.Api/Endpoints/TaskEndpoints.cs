@@ -202,12 +202,35 @@ public static class TaskEndpoints
         });
     }
 
+    // Length caps mirror the EF configuration (TaskItemConfiguration). Checked here so the
+    // caller gets a friendly 400 ProblemDetails instead of EF raising a SqlException.
+    private const int TitleMaxLength = 200;
+    private const int DescriptionMaxLength = 2000;
+    private const int ReferenceCodeMaxLength = 40;
+    private const int ExternalUrlMaxLength = 500;
+
     private static IResult? Validate(SaveTaskRequest req)
     {
         var errors = new Dictionary<string, string[]>();
         if (string.IsNullOrWhiteSpace(req.Title))
         {
             errors["title"] = ["A title is required."];
+        }
+        else if (req.Title.Length > TitleMaxLength)
+        {
+            errors["title"] = [$"Title must be {TitleMaxLength} characters or fewer."];
+        }
+        if (req.Description is { Length: > DescriptionMaxLength })
+        {
+            errors["description"] = [$"Description must be {DescriptionMaxLength} characters or fewer."];
+        }
+        if (req.ReferenceCode is { Length: > ReferenceCodeMaxLength })
+        {
+            errors["referenceCode"] = [$"Reference code must be {ReferenceCodeMaxLength} characters or fewer."];
+        }
+        if (req.ExternalUrl is { Length: > ExternalUrlMaxLength })
+        {
+            errors["externalUrl"] = [$"External URL must be {ExternalUrlMaxLength} characters or fewer."];
         }
         if (req.PercentComplete is < 0 or > 100)
         {

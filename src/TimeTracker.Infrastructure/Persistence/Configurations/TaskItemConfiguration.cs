@@ -10,7 +10,8 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
     {
         builder.ToTable("t_task");
         builder.HasKey(x => x.Id);
-        builder.Property(x => x.Title).IsRequired().HasMaxLength(300);
+        // UI MaxLength + API validation enforce the same caps; DB constraint is the last line.
+        builder.Property(x => x.Title).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Description).HasMaxLength(2000);
         builder.Property(x => x.Project).HasMaxLength(200);
         builder.Property(x => x.ReferenceCode).HasMaxLength(40);

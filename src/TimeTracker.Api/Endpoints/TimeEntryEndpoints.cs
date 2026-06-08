@@ -240,12 +240,9 @@ public static class TimeEntryEndpoints
         api.MapPost("/api/organizations/{orgId:int}/time-entries",
             async (int orgId, CreateTimeEntryRequest request, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (string.IsNullOrWhiteSpace(request.Note))
+            if (ValidateNote(request.Note) is { } problem)
             {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["note"] = ["A note describing what was completed is required."],
-                });
+                return problem;
             }
 
             var userId = await currentUser.GetUserIdAsync();
@@ -302,12 +299,9 @@ public static class TimeEntryEndpoints
         api.MapPut("/api/organizations/{orgId:int}/time-entries/{id:long}",
             async (int orgId, long id, CreateTimeEntryRequest request, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
-            if (string.IsNullOrWhiteSpace(request.Note))
+            if (ValidateNote(request.Note) is { } problem)
             {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["note"] = ["A note describing what was completed is required."],
-                });
+                return problem;
             }
 
             var userId = await currentUser.GetUserIdAsync();
@@ -366,6 +360,29 @@ public static class TimeEntryEndpoints
             await db.SaveChangesAsync();
             return Results.NoContent();
         });
+    }
+
+    // Note length cap matches the EF configuration (TimeEntryConfiguration). Validated here
+    // so callers see a friendly 400 ProblemDetails rather than a SqlException at save time.
+    private const int NoteMaxLength = 2000;
+
+    private static IResult? ValidateNote(string? note)
+    {
+        if (string.IsNullOrWhiteSpace(note))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["note"] = ["A note describing what was completed is required."],
+            });
+        }
+        if (note.Length > NoteMaxLength)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["note"] = [$"Note must be {NoteMaxLength} characters or fewer."],
+            });
+        }
+        return null;
     }
 
     private enum Grouping { None, Day, Week, Month }
