@@ -14,6 +14,8 @@ public class TimeEntryFieldConfiguration : IEntityTypeConfiguration<TimeEntryFie
         builder.Property(x => x.FieldKey).IsRequired().HasMaxLength(100);
         builder.Property(x => x.Label).IsRequired().HasMaxLength(200);
         builder.Property(x => x.IsActive).HasDefaultValue(true);
+        // Matches Option.Value's 200-char cap so select defaults are interchangeable.
+        builder.Property(x => x.DefaultValue).HasMaxLength(200);
 
         builder.HasOne(x => x.Organization)
             .WithMany(o => o.TimeEntryFields)

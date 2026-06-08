@@ -9,6 +9,9 @@ public record OrganizationDto(int Id, string Name, string? RoleName, bool Requir
 public record EntryFieldOptionDto(string Value, string Label, string? Icon = null);
 
 /// <summary>Definition of a configurable extra field shown on the entry form.</summary>
+/// <param name="DefaultValue">Stringified default; the entry form pre-fills it onto new entries
+/// when the user hasn't yet set a value. Interpretation matches the admin contract:
+/// Boolean = "true"/"false"/null, Select = must be one of Options[].Value, others = literal.</param>
 public record EntryFieldDto(
     int Id,
     string FieldKey,
@@ -16,6 +19,7 @@ public record EntryFieldDto(
     FieldDataType DataType,
     bool IsRequired,
     int SortOrder,
+    string? DefaultValue,
     IReadOnlyList<EntryFieldOptionDto> Options);
 
 /// <summary>Payload to create a time entry. Note is the only always-required field.</summary>

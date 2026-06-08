@@ -69,15 +69,27 @@
                 Attributes = e.Attributes.ToDictionary(a => a.FieldId, a => a.Value),
             };
         }
-        else if (InitialTaskId is { } taskId)
+        else
         {
-            model.TaskId = taskId;
-            // Mirror TimeEntryFields.OnTaskChanged: pre-link from "Log time from task" should
-            // also carry the task's first-class project into the entry.
-            var task = Tasks?.FirstOrDefault(t => t.Id == taskId);
-            if (task?.ProjectId is { } pid)
+            // NEW entry: seed any field DefaultValue the admin configured. Only fields the
+            // current user can see (Fields is already role-scoped server-side) get defaults.
+            // Edit doesn't apply defaults — that would silently overwrite values the user
+            // already chose.
+            foreach (var f in Fields.Where(f => !string.IsNullOrEmpty(f.DefaultValue)))
             {
-                model.ProjectId = pid;
+                model.Attributes[f.Id] = f.DefaultValue;
+            }
+
+            if (InitialTaskId is { } taskId)
+            {
+                model.TaskId = taskId;
+                // Mirror TimeEntryFields.OnTaskChanged: pre-link from "Log time from task"
+                // should also carry the task's first-class project into the entry.
+                var task = Tasks?.FirstOrDefault(t => t.Id == taskId);
+                if (task?.ProjectId is { } pid)
+                {
+                    model.ProjectId = pid;
+                }
             }
         }
     }

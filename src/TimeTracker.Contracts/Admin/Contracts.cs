@@ -9,6 +9,8 @@ public record OrganizationRoleDto(int Id, string Name);
 public record EntryFieldOptionInput(string Value, string Label, int SortOrder, string? Icon = null);
 
 /// <summary>Full admin view of a configurable field, including inactive ones.</summary>
+/// <param name="DefaultValue">Stringified default; interpretation depends on DataType.
+/// Boolean: "true"/"false"/null. Select: must match one of Options[].Value. Number/Date/Text: literal.</param>
 public record EntryFieldAdminDto(
     int Id,
     string FieldKey,
@@ -19,6 +21,7 @@ public record EntryFieldAdminDto(
     bool IsActive,
     int? OrganizationRoleId,
     string? OrganizationRoleName,
+    string? DefaultValue,
     IReadOnlyList<EntryFieldOptionInput> Options);
 
 /// <summary>Create/update payload for a configurable field.</summary>
@@ -36,6 +39,13 @@ public record SaveEntryFieldRequest
 
     /// <summary>Allowed values; only meaningful for <see cref="FieldDataType.Select"/>.</summary>
     public List<EntryFieldOptionInput> Options { get; init; } = new();
+
+    /// <summary>
+    /// Pre-fill on new entries when the user hasn't touched this field. Server validates
+    /// per DataType: Boolean = "true"/"false"/null, Select = must match an Option value,
+    /// Number = parseable, Text/Date = anything.
+    /// </summary>
+    public string? DefaultValue { get; init; }
 }
 
 /// <summary>Result of a save, echoing the field id and whether it was deactivated vs deleted.</summary>

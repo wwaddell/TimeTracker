@@ -37,6 +37,44 @@
                 <MudCheckBox T="bool" Label="Required" @bind-Value="model.IsRequired" />
                 <MudCheckBox T="bool" Label="Active" @bind-Value="model.IsActive" />
             </MudItem>
+
+            @* Type-aware default value. Stored as a string regardless; the input shape
+               adapts so the admin can't enter a default that won't validate. *@
+            <MudItem xs="12" sm="6">
+                @switch (model.DataType)
+                {
+                    case FieldDataType.Boolean:
+                        <MudSelect T="string" @bind-Value="model.DefaultValue" Label="Default value"
+                                   Variant="Variant.Outlined" Clearable="true" Placeholder="No default">
+                            <MudSelectItem T="string" Value="@((string?)null)">No default (null)</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("true")">True</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("false")">False</MudSelectItem>
+                        </MudSelect>
+                        break;
+                    case FieldDataType.Select:
+                        <MudSelect T="string" @bind-Value="model.DefaultValue" Label="Default value"
+                                   Variant="Variant.Outlined" Clearable="true" Placeholder="No default">
+                            <MudSelectItem T="string" Value="@((string?)null)">No default</MudSelectItem>
+                            @foreach (var opt in model.Options.Where(o => !string.IsNullOrWhiteSpace(o.Value)))
+                            {
+                                <MudSelectItem T="string" Value="@opt.Value">@(string.IsNullOrEmpty(opt.Label) ? opt.Value : opt.Label)</MudSelectItem>
+                            }
+                        </MudSelect>
+                        break;
+                    case FieldDataType.Number:
+                        <MudTextField T="string" @bind-Value="model.DefaultValue" Label="Default value"
+                                      Variant="Variant.Outlined" Placeholder="No default" InputType="InputType.Number" />
+                        break;
+                    case FieldDataType.Date:
+                        <MudTextField T="string" @bind-Value="model.DefaultValue" Label="Default value (YYYY-MM-DD)"
+                                      Variant="Variant.Outlined" Placeholder="No default" />
+                        break;
+                    default: // Text
+                        <MudTextField T="string" @bind-Value="model.DefaultValue" Label="Default value"
+                                      Variant="Variant.Outlined" Placeholder="No default" MaxLength="200" />
+                        break;
+                }
+            </MudItem>
         </MudGrid>
 
         @if (model.DataType == FieldDataType.Select)
@@ -125,6 +163,7 @@
                 SortOrder = f.SortOrder,
                 IsActive = f.IsActive,
                 OrganizationRoleId = f.OrganizationRoleId,
+                DefaultValue = f.DefaultValue,
                 Options = f.Options.Select(o => new OptionEditModel { Value = o.Value, Label = o.Label, Icon = o.Icon }).ToList(),
             };
         }
@@ -159,6 +198,7 @@
                 SortOrder = model.SortOrder,
                 IsActive = model.IsActive,
                 OrganizationRoleId = model.OrganizationRoleId,
+                DefaultValue = string.IsNullOrWhiteSpace(model.DefaultValue) ? null : model.DefaultValue.Trim(),
                 Options = model.Options
                     .Where(o => !string.IsNullOrWhiteSpace(o.Value))
                     .Select((o, i) => new EntryFieldOptionInput(o.Value, o.Label, i + 1, o.Icon))
@@ -197,6 +237,7 @@
         public int SortOrder { get; set; }
         public bool IsActive { get; set; } = true;
         public int? OrganizationRoleId { get; set; }
+        public string? DefaultValue { get; set; }
         public List<OptionEditModel> Options { get; set; } = new();
     }
 

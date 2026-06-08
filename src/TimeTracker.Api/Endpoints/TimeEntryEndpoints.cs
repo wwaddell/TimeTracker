@@ -61,6 +61,7 @@ public static class TimeEntryEndpoints
                 .OrderBy(f => f.SortOrder)
                 .Select(f => new EntryFieldDto(
                     f.Id, f.FieldKey, f.Label, f.DataType, f.IsRequired, f.SortOrder,
+                    f.DefaultValue,
                     f.Options.OrderBy(o => o.SortOrder)
                         .Select(o => new EntryFieldOptionDto(o.Value, o.Label, o.Icon)).ToList()))
                 .ToListAsync();

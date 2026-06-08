@@ -69,6 +69,7 @@ public static class AdminEndpoints
                     f.Id, f.FieldKey, f.Label, f.DataType, f.IsRequired, f.SortOrder, f.IsActive,
                     f.OrganizationRoleId,
                     f.OrganizationRole != null ? f.OrganizationRole.Name : null,
+                    f.DefaultValue,
                     f.Options.OrderBy(o => o.SortOrder)
                         .Select(o => new EntryFieldOptionInput(o.Value, o.Label, o.SortOrder, o.Icon)).ToList()))
                 .ToListAsync();
@@ -101,6 +102,7 @@ public static class AdminEndpoints
                 IsRequired = req.IsRequired,
                 SortOrder = req.SortOrder,
                 IsActive = req.IsActive,
+                DefaultValue = NormalizeDefaultValue(req),
                 CreatedUtc = DateTime.UtcNow,
             };
             ApplyOptions(field, req);
@@ -141,6 +143,7 @@ public static class AdminEndpoints
             field.IsRequired = req.IsRequired;
             field.SortOrder = req.SortOrder;
             field.IsActive = req.IsActive;
+            field.DefaultValue = NormalizeDefaultValue(req);
             field.ModifiedUtc = DateTime.UtcNow;
 
             db.TimeEntryFieldOptions.RemoveRange(field.Options);
@@ -223,7 +226,64 @@ public static class AdminEndpoints
             errors["options"] = ["A select field needs at least one option."];
         }
 
+        // Default-value validation — interpretation depends on DataType.
+        var def = req.DefaultValue?.Trim();
+        if (!string.IsNullOrEmpty(def))
+        {
+            if (def.Length > 200)
+            {
+                errors["defaultValue"] = ["Default value must be 200 characters or fewer."];
+            }
+            else
+            {
+                switch (req.DataType)
+                {
+                    case FieldDataType.Boolean:
+                        if (!string.Equals(def, "true", StringComparison.OrdinalIgnoreCase)
+                            && !string.Equals(def, "false", StringComparison.OrdinalIgnoreCase))
+                        {
+                            errors["defaultValue"] = ["Boolean default must be true, false, or empty (no default)."];
+                        }
+                        break;
+                    case FieldDataType.Number:
+                        if (!decimal.TryParse(def, System.Globalization.NumberStyles.Number,
+                            System.Globalization.CultureInfo.InvariantCulture, out _))
+                        {
+                            errors["defaultValue"] = ["Number default must be a valid number."];
+                        }
+                        break;
+                    case FieldDataType.Select:
+                        var validValues = req.Options
+                            .Where(o => !string.IsNullOrWhiteSpace(o.Value))
+                            .Select(o => o.Value)
+                            .ToHashSet(StringComparer.Ordinal);
+                        if (!validValues.Contains(def))
+                        {
+                            errors["defaultValue"] = ["Select default must match one of the defined option values."];
+                        }
+                        break;
+                        // Date and Text accept anything reasonable; client picker enforces format.
+                }
+            }
+        }
+
         return errors.Count > 0 ? Results.ValidationProblem(errors) : null;
+    }
+
+    // Empty / whitespace ⇒ null (no default). Booleans are lowercased so the stored form is
+    // canonical regardless of how the client wrote it.
+    private static string? NormalizeDefaultValue(SaveEntryFieldRequest req)
+    {
+        var def = req.DefaultValue?.Trim();
+        if (string.IsNullOrEmpty(def))
+        {
+            return null;
+        }
+        if (req.DataType == FieldDataType.Boolean)
+        {
+            return string.Equals(def, "true", StringComparison.OrdinalIgnoreCase) ? "true" : "false";
+        }
+        return def;
     }
 
     private static void ApplyOptions(TimeEntryField field, SaveEntryFieldRequest req)
