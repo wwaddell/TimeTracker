@@ -76,10 +76,16 @@ public class TimeTrackerApi(HttpClient http)
 
     // --- Tasks ---
 
-    public async Task<IReadOnlyList<TaskDto>> GetTasksAsync(int orgId, string? scope = null)
+    /// <summary>
+    /// List tasks. <paramref name="assigneeId"/> takes precedence over <paramref name="scope"/>
+    /// when set — matches the server contract; pass one or the other.
+    /// </summary>
+    public async Task<IReadOnlyList<TaskDto>> GetTasksAsync(int orgId, string? scope = null, int? assigneeId = null)
     {
-        var url = $"/api/organizations/{orgId}/tasks"
-            + (string.IsNullOrEmpty(scope) ? "" : $"?scope={Uri.EscapeDataString(scope)}");
+        var qs = new List<string>();
+        if (!string.IsNullOrEmpty(scope)) qs.Add($"scope={Uri.EscapeDataString(scope)}");
+        if (assigneeId is int aid && aid > 0) qs.Add($"assigneeId={aid}");
+        var url = $"/api/organizations/{orgId}/tasks" + (qs.Count > 0 ? "?" + string.Join("&", qs) : "");
         return await GetAsync<List<TaskDto>>(url) ?? [];
     }
 

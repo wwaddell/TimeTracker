@@ -55,11 +55,26 @@ else
     @* No page title — the nav highlights "Tasks" and the columns headers narrate. *@
     <div class="d-flex justify-end align-center mb-3 flex-wrap" style="gap:1rem">
         <div class="d-flex align-center flex-wrap" style="gap:.75rem">
-            <MudSelect T="string" Value="scope" ValueChanged="OnScopeChanged" Dense="true"
-                       Margin="Margin.Dense" Variant="Variant.Outlined" Label="Show" Style="min-width:200px">
+            @* Value encoding: "mine" | "assigned-by-me" | "all" for my-axis filters,
+               or "user:<id>" to filter to another member's tasks. OnScopeChanged
+               unpacks the prefix and chooses scope vs assigneeId on the API. *@
+            <MudSelect T="string" Value="filter" ValueChanged="OnFilterChanged" Dense="true"
+                       Margin="Margin.Dense" Variant="Variant.Outlined" Label="Show" Style="min-width:220px">
                 <MudSelectItem T="string" Value="@("mine")">Assigned to me</MudSelectItem>
                 <MudSelectItem T="string" Value="@("assigned-by-me")">I assigned to others</MudSelectItem>
                 <MudSelectItem T="string" Value="@("all")">All I'm involved in</MudSelectItem>
+                @if (members is { Count: > 0 } && me is not null)
+                {
+                    @* Disabled label acts as a section divider — Mud doesn't have a true Divider
+                       in MudSelect. Skip "me" since it's already covered by Assigned to me. *@
+                    <MudSelectItem T="string" Value="@("__div__")" Disabled="true">─── Members ───</MudSelectItem>
+                    @foreach (var m in members.Where(x => x.UserId != me.Id).OrderBy(x => x.DisplayName))
+                    {
+                        <MudSelectItem T="string" Value="@($"user:{m.UserId}")">
+                            @m.DisplayName@(m.IsPending ? " (pending)" : "")'s tasks
+                        </MudSelectItem>
+                    }
+                }
             </MudSelect>
             <MudTextField T="string" @bind-Value="search" Immediate="true" Clearable="true"
                           Placeholder="Search tasks…" Adornment="Adornment.Start"
@@ -251,7 +266,10 @@ else
 
     private string? search;
     private bool showAll; // false = active only (default)
-    private string scope = "mine"; // "mine" | "assigned-by-me" | "all"
+    // Encoded filter value selected in the "Show" dropdown:
+    //   "mine" | "assigned-by-me" | "all"  → my-axis scopes (existing)
+    //   "user:<id>"                         → tasks assigned to a specific other member
+    private string filter = "mine";
 
     // Outlook-style list sort: click a header to toggle direction; clicking a new key resets to descending
     // for priority/progress and ascending for everything else (matches what people usually want).
@@ -275,11 +293,19 @@ else
     private string SortGlyph(SortKey key) =>
         sortKey == key ? (sortDesc ? " ▾" : " ▴") : string.Empty;
 
-    private async Task OnScopeChanged(string value)
+    private async Task OnFilterChanged(string value)
     {
-        scope = value;
+        if (value == "__div__") return; // section-header sentinel; not a real selection
+        filter = value;
         await GuardAsync(LoadAsync);
     }
+
+    // Unpack the encoded filter into the two API params. user:<id> takes the assignee path;
+    // everything else passes through as a scope string.
+    private (string? scope, int? assigneeId) ResolveFilter() =>
+        filter.StartsWith("user:") && int.TryParse(filter[5..], out var uid)
+            ? (null, uid)
+            : (filter, null);
 
     private bool OrgRequiresTime =>
         organizations?.FirstOrDefault(o => o.Id == selectedOrgId)?.RequireTime ?? true;
@@ -353,7 +379,8 @@ else
 
     private async Task LoadAsync()
     {
-        tasks = await Api.GetTasksAsync(selectedOrgId, scope);
+        var (s, aid) = ResolveFilter();
+        tasks = await Api.GetTasksAsync(selectedOrgId, s, aid);
         fields = await Api.GetEntryFieldsAsync(selectedOrgId);
         projects = await Api.GetVisibleProjectsAsync(selectedOrgId);
         // Members feed the assignee picker. Falls back to "just me" if the user lacks

@@ -12,11 +12,13 @@ public static class TaskEndpoints
     {
         var api = app.MapGroup("").RequireAuthorization();
 
-        // List the current user's tasks within an org.
+        // List tasks within an org.
         // ?scope=mine (default): tasks assigned to me; assigned-by-me: tasks I created that are
-        // now assigned to someone else; all: either assigned to me OR created by me.
+        //   now assigned to someone else; all: either assigned to me OR created by me.
+        // ?assigneeId=X: show tasks assigned to a specific org member (overrides scope). The
+        //   caller still has to be a member of the org; assignee just has to be too.
         api.MapGet("/api/organizations/{orgId:int}/tasks", async (
-            int orgId, string? scope, TimeTrackerDbContext db, ICurrentUser currentUser) =>
+            int orgId, string? scope, int? assigneeId, TimeTrackerDbContext db, ICurrentUser currentUser) =>
         {
             var userId = await currentUser.GetUserIdAsync();
             if (!await IsMemberAsync(db, userId, orgId))
@@ -25,12 +27,29 @@ public static class TaskEndpoints
             }
 
             var baseQuery = db.Tasks.Where(t => t.OrganizationId == orgId);
-            var filtered = scope?.ToLowerInvariant() switch
+            IQueryable<TaskItem> filtered;
+            if (assigneeId is int aid && aid > 0)
             {
-                "assigned-by-me" => baseQuery.Where(t => t.UserId == userId && t.AssignedToUserId != userId),
-                "all"            => baseQuery.Where(t => t.AssignedToUserId == userId || t.UserId == userId),
-                _                => baseQuery.Where(t => t.AssignedToUserId == userId), // "mine" (default)
-            };
+                // Specific assignee — overrides scope. Validate they're in the same org so this
+                // doesn't become a cross-org peek.
+                if (!await IsMemberAsync(db, aid, orgId))
+                {
+                    return Results.ValidationProblem(new Dictionary<string, string[]>
+                    {
+                        ["assigneeId"] = ["The selected user isn't a member of this organization."],
+                    });
+                }
+                filtered = baseQuery.Where(t => t.AssignedToUserId == aid);
+            }
+            else
+            {
+                filtered = scope?.ToLowerInvariant() switch
+                {
+                    "assigned-by-me" => baseQuery.Where(t => t.UserId == userId && t.AssignedToUserId != userId),
+                    "all"            => baseQuery.Where(t => t.AssignedToUserId == userId || t.UserId == userId),
+                    _                => baseQuery.Where(t => t.AssignedToUserId == userId), // "mine" (default)
+                };
+            }
 
             var tasks = await filtered
                 .OrderBy(t => t.IsComplete).ThenByDescending(t => t.Id)
