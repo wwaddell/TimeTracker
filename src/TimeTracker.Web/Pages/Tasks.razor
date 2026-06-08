@@ -55,26 +55,28 @@ else
     @* No page title — the nav highlights "Tasks" and the columns headers narrate. *@
     <div class="d-flex justify-end align-center mb-3 flex-wrap" style="gap:1rem">
         <div class="d-flex align-center flex-wrap" style="gap:.75rem">
-            @* Value encoding: "mine" | "assigned-by-me" | "all" for my-axis filters,
-               or "user:<id>" to filter to another member's tasks. OnScopeChanged
-               unpacks the prefix and chooses scope vs assigneeId on the API. *@
+            @* Value encoding:
+                 "mine" | "assigned-by-me" | "all"  → my-axis scopes
+                 "user:<id>"                         → the currently picked Other person
+                 "__pick__"                          → sentinel: open the picker dialog
+               Picking the sentinel doesn't change `filter`; the dialog returns a MemberDto
+               which we slot in as the new pickedOther + change filter to "user:<id>".
+               Scales to big orgs: no enumeration of every member in the dropdown. *@
             <MudSelect T="string" Value="filter" ValueChanged="OnFilterChanged" Dense="true"
                        Margin="Margin.Dense" Variant="Variant.Outlined" Label="Show" Style="min-width:220px">
                 <MudSelectItem T="string" Value="@("mine")">Assigned to me</MudSelectItem>
                 <MudSelectItem T="string" Value="@("assigned-by-me")">I assigned to others</MudSelectItem>
                 <MudSelectItem T="string" Value="@("all")">All I'm involved in</MudSelectItem>
-                @if (members is { Count: > 0 } && me is not null)
+                @if (pickedOther is not null)
                 {
-                    @* Disabled label acts as a section divider — Mud doesn't have a true Divider
-                       in MudSelect. Skip "me" since it's already covered by Assigned to me. *@
-                    <MudSelectItem T="string" Value="@("__div__")" Disabled="true">─── Members ───</MudSelectItem>
-                    @foreach (var m in members.Where(x => x.UserId != me.Id).OrderBy(x => x.DisplayName))
-                    {
-                        <MudSelectItem T="string" Value="@($"user:{m.UserId}")">
-                            @m.DisplayName@(m.IsPending ? " (pending)" : "")'s tasks
-                        </MudSelectItem>
-                    }
+                    @* Shows the most-recently-picked "Other" person above the picker prompt.
+                       Re-selecting this item just re-applies the filter; picking Other person
+                       again opens the dialog and replaces this entry with the new selection. *@
+                    <MudSelectItem T="string" Value="@($"user:{pickedOther.UserId}")">
+                        @pickedOther.DisplayName@(pickedOther.IsPending ? " (pending)" : "")'s tasks
+                    </MudSelectItem>
                 }
+                <MudSelectItem T="string" Value="@("__pick__")">Other person…</MudSelectItem>
             </MudSelect>
             <MudTextField T="string" @bind-Value="search" Immediate="true" Clearable="true"
                           Placeholder="Search tasks…" Adornment="Adornment.Start"
@@ -271,6 +273,10 @@ else
     //   "user:<id>"                         → tasks assigned to a specific other member
     private string filter = "mine";
 
+    /// <summary>The most-recently chosen "Other person" — kept around so the dropdown can
+    /// show their name above the picker prompt. Replaced when the user picks again.</summary>
+    private MemberDto? pickedOther;
+
     // Outlook-style list sort: click a header to toggle direction; clicking a new key resets to descending
     // for priority/progress and ascending for everything else (matches what people usually want).
     private enum SortKey { Priority, Title, Assignee, Project, Due, Estimate, Progress }
@@ -295,9 +301,37 @@ else
 
     private async Task OnFilterChanged(string value)
     {
-        if (value == "__div__") return; // section-header sentinel; not a real selection
+        // "__pick__" is the picker-prompt sentinel — opens the dialog, doesn't change filter
+        // unless the user actually selects someone. Cancelling the dialog leaves the previous
+        // filter in place (and the MudSelect snap-back via StateHasChanged below).
+        if (value == "__pick__")
+        {
+            await OpenPickerAsync();
+            StateHasChanged();
+            return;
+        }
         filter = value;
         await GuardAsync(LoadAsync);
+    }
+
+    private async Task OpenPickerAsync()
+    {
+        var parameters = new DialogParameters<MemberPickerDialog>
+        {
+            { x => x.Members, members ?? [] },
+            { x => x.ExcludeUserId, me?.Id },
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<MemberPickerDialog>("Find a person", parameters, options);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: MemberDto picked })
+        {
+            // Replace the previous pick — the user explicitly asked for "if you pick Other
+            // again, we replace the person you picked the first time with the new person".
+            pickedOther = picked;
+            filter = $"user:{picked.UserId}";
+            await GuardAsync(LoadAsync);
+        }
     }
 
     // Unpack the encoded filter into the two API params. user:<id> takes the assignee path;

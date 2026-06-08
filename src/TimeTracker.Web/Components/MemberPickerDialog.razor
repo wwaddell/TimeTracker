@@ -1,0 +1,78 @@
+@using TimeTracker.Contracts.Members
+
+@*
+    Search-by-name/email picker for org members. Used by the Tasks page "Other person…" filter
+    so the dropdown doesn't have to enumerate every member in a large org. Lives client-side
+    against a pre-loaded list (caller passes Members); for very large orgs we'd swap this for a
+    server-side search endpoint, but the contract (return a MemberDto) stays the same.
+*@
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string" @bind-Value="search" Immediate="true" Clearable="true"
+                      Placeholder="Search by name or email…" AutoFocus="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Variant="Variant.Outlined" Class="mb-3" />
+
+        @if (Members is null || Members.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No members in this organization.</MudText>
+        }
+        else if (!Filtered.Any())
+        {
+            <MudText Class="mud-text-secondary">No matches.</MudText>
+        }
+        else
+        {
+            @* Capped list — typing narrows it. Keeps the dialog from rendering thousands of
+               rows in a giant org; user can keep typing if they don't see who they want. *@
+            <MudList T="MemberDto" Dense="true" Style="max-height:320px; overflow-y:auto">
+                @foreach (var m in Filtered.Take(50))
+                {
+                    <MudListItem T="MemberDto" Value="@m" OnClick="@(() => Pick(m))">
+                        <div class="d-flex flex-column">
+                            <MudText Typo="Typo.body2">
+                                <b>@m.DisplayName</b>@(m.IsPending ? " (pending)" : "")
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@m.Email</MudText>
+                        </div>
+                    </MudListItem>
+                }
+                @if (Filtered.Count() > 50)
+                {
+                    <MudListItem T="MemberDto" Disabled="true">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            …and @(Filtered.Count() - 50) more — keep typing to narrow.
+                        </MudText>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Org members the caller already loaded; the dialog filters in-memory.</summary>
+    [Parameter] public IReadOnlyList<MemberDto> Members { get; set; } = [];
+
+    /// <summary>User id to exclude (typically the current user — already covered by "Assigned to me").</summary>
+    [Parameter] public int? ExcludeUserId { get; set; }
+
+    private string? search;
+
+    private IEnumerable<MemberDto> Filtered =>
+        (Members ?? [])
+        .Where(m => ExcludeUserId is null || m.UserId != ExcludeUserId)
+        .Where(m => string.IsNullOrWhiteSpace(search)
+            || m.DisplayName.Contains(search!, StringComparison.OrdinalIgnoreCase)
+            || (m.Email?.Contains(search!, StringComparison.OrdinalIgnoreCase) ?? false))
+        .OrderBy(m => m.DisplayName);
+
+    private void Pick(MemberDto m) => MudDialog.Close(DialogResult.Ok(m));
+    private void Cancel() => MudDialog.Cancel();
+}
