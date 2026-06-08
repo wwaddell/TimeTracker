@@ -242,7 +242,34 @@ else
 
     private async Task DeleteFieldAsync(EntryFieldAdminDto f)
     {
-        if (!await JS.InvokeAsync<bool>("confirm", $"Delete the field \"{f.Label}\"?"))
+        // The prompt has to match what the server will actually do, otherwise admins click
+        // "OK" expecting a destructive action and see a soft toggle (or vice versa):
+        //   - System fields           → server deactivates (refuses hard delete). If the
+        //                               field is already inactive, there's nothing to do.
+        //   - Non-system, in-use      → server deactivates (FK is Restrict — can't delete).
+        //   - Non-system, never used  → server hard-deletes.
+        // The first two cases ask "deactivate?"; the last asks "delete?". The Web side can't
+        // perfectly tell #2 from #3 without an extra round-trip, so use the conservative
+        // wording when we know it's deactivate-only (system field).
+        string prompt;
+        if (f.IsSystem)
+        {
+            if (!f.IsActive)
+            {
+                Snackbar.Add($"\"{f.Label}\" is already inactive.", Severity.Info);
+                return;
+            }
+            prompt = $"Deactivate the system field \"{f.Label}\"?\n\n"
+                + "It will be hidden from new entries, but already-logged values are kept "
+                + "and you can reactivate it later. System fields can't be deleted.";
+        }
+        else
+        {
+            prompt = $"Delete the field \"{f.Label}\"?\n\n"
+                + "If it has logged values, it will be deactivated instead of deleted.";
+        }
+
+        if (!await JS.InvokeAsync<bool>("confirm", prompt))
         {
             return;
         }
