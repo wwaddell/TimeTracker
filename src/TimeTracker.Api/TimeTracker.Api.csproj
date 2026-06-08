@@ -9,11 +9,18 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.6" />
+    <!-- Lets this project serve the Blazor WASM client as static files in publish.
+         No runtime reference to the Web assembly; only its published wwwroot is copied. -->
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.*" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\TimeTracker.Infrastructure\TimeTracker.Infrastructure.csproj" />
     <ProjectReference Include="..\TimeTracker.Contracts\TimeTracker.Contracts.csproj" />
+    <!-- Hosted pattern: API + Blazor WASM ship as a single deployable. In dev we still
+         run the Web project on its own port for hot reload; the hosting middleware below
+         is gated to non-Development so dev keeps working unchanged. -->
+    <ProjectReference Include="..\TimeTracker.Web\TimeTracker.Web.csproj" />
   </ItemGroup>
 
 </Project>

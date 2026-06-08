@@ -1,0 +1,82 @@
+# Build and deploy TimeTracker to Azure App Service on every push to main.
+#
+# Pipeline shape (Blazor Hosted pattern):
+#   1. Restore + build the whole solution (Domain/Infrastructure/Contracts/Web/Api).
+#   2. `dotnet publish` the API project. Because Api.csproj references Web.csproj and the
+#      Microsoft.AspNetCore.Components.WebAssembly.Server package, the publish output already
+#      contains the WASM client under wwwroot/ — no separate web build/copy step needed.
+#   3. Run dotnet tests (no-op today; placeholder so adding tests later doesn't require a YAML edit).
+#   4. Deploy the publish folder to the App Service named by the AZURE_WEBAPP_NAME secret using
+#      the publish profile stored in AZURE_WEBAPP_PUBLISH_PROFILE. EF migrations run on startup
+#      (see Api/Program.cs), so the runner doesn't need DB credentials.
+#
+# Secrets required (see .github/AZURE_SETUP.md for how to create them):
+#   AZURE_WEBAPP_NAME              — the App Service name (e.g. "timetracker-prod")
+#   AZURE_WEBAPP_PUBLISH_PROFILE   — full XML downloaded from the App Service "Get publish profile"
+
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  # Manual re-run from the Actions tab without needing a new commit.
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  # Path that gets uploaded as the deployment artifact.
+  PUBLISH_DIR: ${{ github.workspace }}/publish
+  API_PROJECT: src/TimeTracker.Api/TimeTracker.Api.csproj
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          # Allow .NET 10 previews — fall back when GA hits LTS.
+          include-prerelease: true
+
+      - name: Restore
+        run: dotnet restore TimeTracker.slnx
+
+      - name: Build
+        run: dotnet build TimeTracker.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test TimeTracker.slnx --configuration Release --no-build --verbosity normal
+
+      - name: Publish API (includes WASM client via project ref)
+        run: dotnet publish ${{ env.API_PROJECT }} --configuration Release --no-build --output ${{ env.PUBLISH_DIR }}
+
+      - name: Upload publish artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webapp
+          path: ${{ env.PUBLISH_DIR }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # Tie deploys to a GitHub Environment so we can later add manual approval / branch protection.
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.webapp-url }}
+    steps:
+      - name: Download publish artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: webapp
+          path: ${{ env.PUBLISH_DIR }}
+
+      - name: Deploy to Azure Web App
+        id: deploy
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ${{ env.PUBLISH_DIR }}

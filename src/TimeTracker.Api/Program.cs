@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using TimeTracker.Api;
 using TimeTracker.Api.Auth;
 using TimeTracker.Api.Calendar;
@@ -85,6 +86,16 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
+// Apply EF migrations on every startup regardless of environment. Cheap when the DB is up
+// to date; the alternative (running `dotnet ef database update` from the pipeline) needs the
+// runner to reach Azure SQL and brings its own ops headaches. Dev-only seeding (DevData)
+// still gated below so prod doesn't get Acme/Personal sample rows.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<TimeTrackerDbContext>();
+    await db.Database.MigrateAsync();
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -106,6 +117,17 @@ if (app.Environment.IsDevelopment())
 if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
+}
+
+// Hosted Blazor: serve the WASM client's static files from the same App Service.
+// Order matters — these must run BEFORE auth and the MapFallback below must run AFTER
+// the API endpoints so /api/* still routes to the minimal endpoints rather than the SPA.
+// Gated on !Development because in dev the Web project is hosted separately on :5008
+// with hot reload; we don't want the API to also serve a (stale, copy-built) wwwroot.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseBlazorFrameworkFiles();
+    app.UseStaticFiles();
 }
 
 app.UseCors(WebCorsPolicy);
@@ -139,5 +161,14 @@ app.MapCalendarEndpoints();
 app.MapGlobalAdminEndpoints();
 app.MapMeEndpoints();
 app.MapProjectEndpoints();
+
+// SPA fallback: any non-API path with no matching static file falls through to index.html
+// so client-side routing (Blazor) handles it. /api/* won't reach here because the minimal
+// API endpoints above match first. Dev-only check matches the static-file middleware above
+// so the dev API stays a pure API.
+if (!app.Environment.IsDevelopment())
+{
+    app.MapFallbackToFile("index.html");
+}
 
 app.Run();
