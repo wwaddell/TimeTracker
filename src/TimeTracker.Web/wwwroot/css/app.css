@@ -229,10 +229,13 @@ code {
 .tt-col--actions  { width: var(--tt-col-actions); text-align: right; white-space: nowrap; }
 
 /* Collapse the secondary columns under the title when the table itself is too narrow to fit
-   the full 8-column row. 760px = the natural sum of fixed column widths + gaps + padding,
-   below which the actions column would otherwise be clipped by overflow:hidden. Container
-   queries (not @media) so this fires from sidebar narrowing too, not just small viewports. */
-@container tt-tasks-container (max-width: 760px) {
+   the full 8-column row. The grid's natural minimum is ~976px (24 priority + 220 title min
+   + 120 assignee + 140 project + 72 due + 56 est + 140 progress + 124 actions + 56 gaps +
+   24 row padding). Anything below that forces the title past its minmax floor and overflows
+   the right, clipping actions. 1000px = the natural minimum plus a small safety margin so
+   iPad-landscape-with-sidebar (~1024 viewport - ~250 sidebar = ~770 table width) collapses
+   cleanly. Container query (not @media) so this fires from sidebar narrowing too. */
+@container tt-tasks-container (max-width: 1000px) {
     .tt-tasks__head,
     .tt-tasks__line {
         grid-template-columns: var(--tt-col-pri) minmax(0, 1fr) var(--tt-col-actions);
