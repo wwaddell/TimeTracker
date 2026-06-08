@@ -55,7 +55,7 @@ public static class TaskEndpoints
                 .OrderBy(t => t.IsComplete).ThenByDescending(t => t.Id)
                 .Select(t => new TaskDto(t.Id, t.Title, t.Description, t.IsComplete,
                     t.EstimatedHours, t.PercentComplete, t.PercentBeforeComplete,
-                    t.Priority, t.DueDate, t.Project,
+                    t.Priority, t.DueDate,
                     t.ProjectId, t.ProjectEntity != null ? t.ProjectEntity.Name : null,
                     t.ReferenceCode, t.ExternalUrl,
                     t.AssignedToUserId, t.AssignedTo.DisplayName,
@@ -103,7 +103,6 @@ public static class TaskEndpoints
                 PercentBeforeComplete = request.IsComplete ? request.PercentBeforeComplete : null,
                 Priority = request.Priority,
                 DueDate = request.DueDate,
-                Project = string.IsNullOrWhiteSpace(request.Project) ? null : request.Project.Trim(),
                 ProjectId = request.ProjectId,
                 ReferenceCode = string.IsNullOrWhiteSpace(request.ReferenceCode) ? null : request.ReferenceCode.Trim(),
                 ExternalUrl = string.IsNullOrWhiteSpace(request.ExternalUrl) ? null : request.ExternalUrl.Trim(),
@@ -157,7 +156,6 @@ public static class TaskEndpoints
             task.PercentBeforeComplete = request.IsComplete ? request.PercentBeforeComplete : null;
             task.Priority = request.Priority;
             task.DueDate = request.DueDate;
-            task.Project = string.IsNullOrWhiteSpace(request.Project) ? null : request.Project.Trim();
             task.ProjectId = request.ProjectId;
             task.ReferenceCode = string.IsNullOrWhiteSpace(request.ReferenceCode) ? null : request.ReferenceCode.Trim();
             task.ExternalUrl = string.IsNullOrWhiteSpace(request.ExternalUrl) ? null : request.ExternalUrl.Trim();

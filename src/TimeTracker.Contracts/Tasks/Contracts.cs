@@ -13,7 +13,6 @@ public record TaskDto(
     int? PercentBeforeComplete,
     TaskPriority? Priority,
     DateOnly? DueDate,
-    string? Project,
     int? ProjectId,
     string? ProjectName,
     string? ReferenceCode,
@@ -40,10 +39,7 @@ public record SaveTaskRequest
     /// <summary>Optional due date.</summary>
     public DateOnly? DueDate { get; init; }
 
-    /// <summary>Optional legacy project (configurable "Project" field value).</summary>
-    public string? Project { get; init; }
-
-    /// <summary>Optional first-class project this task is linked to (preferred).</summary>
+    /// <summary>Optional first-class project this task is linked to.</summary>
     public int? ProjectId { get; init; }
 
     /// <summary>Optional short tag (e.g. external ticket id).</summary>

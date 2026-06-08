@@ -13,7 +13,6 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         // UI MaxLength + API validation enforce the same caps; DB constraint is the last line.
         builder.Property(x => x.Title).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Description).HasMaxLength(2000);
-        builder.Property(x => x.Project).HasMaxLength(200);
         builder.Property(x => x.ReferenceCode).HasMaxLength(40);
         builder.Property(x => x.ExternalUrl).HasMaxLength(500);
         builder.Property(x => x.EstimatedHours).HasColumnType("decimal(7,2)");
