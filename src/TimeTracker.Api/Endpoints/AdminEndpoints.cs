@@ -70,6 +70,7 @@ public static class AdminEndpoints
                     f.OrganizationRoleId,
                     f.OrganizationRole != null ? f.OrganizationRole.Name : null,
                     f.DefaultValue,
+                    f.IsSystem,
                     f.Options.OrderBy(o => o.SortOrder)
                         .Select(o => new EntryFieldOptionInput(o.Value, o.Label, o.SortOrder, o.Icon)).ToList()))
                 .ToListAsync();
@@ -130,6 +131,29 @@ public static class AdminEndpoints
                 return Results.NotFound();
             }
 
+            // System fields lock down structural properties: only IsRequired / IsActive /
+            // SortOrder / OrganizationRoleId can change. Skip the full validation in that
+            // case so a client sending the original (unchanged) Label/Key/Type doesn't hit
+            // the FieldKey-uniqueness check against itself.
+            if (field.IsSystem)
+            {
+                field.IsRequired = req.IsRequired;
+                field.SortOrder = req.SortOrder;
+                field.IsActive = req.IsActive;
+                if (req.OrganizationRoleId is { } roleId &&
+                    !await db.OrganizationRoles.AnyAsync(r => r.Id == roleId && r.OrganizationId == orgId))
+                {
+                    return Results.ValidationProblem(new Dictionary<string, string[]>
+                    {
+                        ["organizationRoleId"] = ["The selected role does not belong to this organization."],
+                    });
+                }
+                field.OrganizationRoleId = req.OrganizationRoleId;
+                field.ModifiedUtc = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+                return Results.Ok(new { field.Id });
+            }
+
             var validation = await ValidateAsync(db, orgId, req, fieldId);
             if (validation is not null)
             {
@@ -169,6 +193,20 @@ public static class AdminEndpoints
             if (field is null)
             {
                 return Results.NotFound();
+            }
+
+            // System fields can be turned off but never destroyed. Toggling IsActive=false
+            // hides them from new entries, which is the natural "delete" semantic here.
+            if (field.IsSystem)
+            {
+                if (field.IsActive)
+                {
+                    field.IsActive = false;
+                    field.ModifiedUtc = DateTime.UtcNow;
+                    await db.SaveChangesAsync();
+                }
+                return Results.Ok(new DeleteFieldResult(false, true,
+                    "System fields can't be deleted; this one was deactivated instead."));
             }
 
             var inUse = await db.TimeEntryAttributes.AnyAsync(a => a.TimeEntryFieldId == fieldId);

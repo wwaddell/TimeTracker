@@ -5,16 +5,30 @@
 
 <MudDialog>
     <DialogContent>
+        @if (model.IsSystem)
+        {
+            @* Visible banner so the admin knows what's editable and why. *@
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                <b>System field</b> — the structure (label, key, type, options, default) is fixed.
+                You can still control whether this field is required, active, where it sorts, and
+                which role sees it.
+            </MudAlert>
+        }
         <MudGrid>
             <MudItem xs="12" sm="6">
-                <MudTextField T="string" Label="Label" @bind-Value="model.Label" Required="true" Variant="Variant.Outlined" />
+                <MudTextField T="string" Label="Label" @bind-Value="model.Label" Required="true"
+                              ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
+                              Variant="Variant.Outlined" />
             </MudItem>
             <MudItem xs="12" sm="6">
                 <MudTextField T="string" Label="Key" @bind-Value="model.FieldKey" Required="true"
+                              ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
                               Variant="Variant.Outlined" Placeholder="e.g. project_code" />
             </MudItem>
             <MudItem xs="12" sm="4">
-                <MudSelect T="FieldDataType" Label="Type" @bind-Value="model.DataType" Variant="Variant.Outlined">
+                <MudSelect T="FieldDataType" Label="Type" @bind-Value="model.DataType"
+                           ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
+                           Variant="Variant.Outlined">
                     @foreach (var dt in Enum.GetValues<FieldDataType>())
                     {
                         <MudSelectItem T="FieldDataType" Value="@dt">@dt</MudSelectItem>
@@ -39,12 +53,14 @@
             </MudItem>
 
             @* Type-aware default value. Stored as a string regardless; the input shape
-               adapts so the admin can't enter a default that won't validate. *@
+               adapts so the admin can't enter a default that won't validate. Locked for
+               system fields — defaults are part of the structural definition. *@
             <MudItem xs="12" sm="6">
                 @switch (model.DataType)
                 {
                     case FieldDataType.Boolean:
                         <MudSelect T="string" @bind-Value="model.DefaultValue" Label="Default value"
+                                   ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
                                    Variant="Variant.Outlined" Clearable="true" Placeholder="No default">
                             <MudSelectItem T="string" Value="@((string?)null)">No default (null)</MudSelectItem>
                             <MudSelectItem T="string" Value="@("true")">True</MudSelectItem>
@@ -53,6 +69,7 @@
                         break;
                     case FieldDataType.Select:
                         <MudSelect T="string" @bind-Value="model.DefaultValue" Label="Default value"
+                                   ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
                                    Variant="Variant.Outlined" Clearable="true" Placeholder="No default">
                             <MudSelectItem T="string" Value="@((string?)null)">No default</MudSelectItem>
                             @foreach (var opt in model.Options.Where(o => !string.IsNullOrWhiteSpace(o.Value)))
@@ -63,14 +80,17 @@
                         break;
                     case FieldDataType.Number:
                         <MudTextField T="string" @bind-Value="model.DefaultValue" Label="Default value"
+                                      ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
                                       Variant="Variant.Outlined" Placeholder="No default" InputType="InputType.Number" />
                         break;
                     case FieldDataType.Date:
                         <MudTextField T="string" @bind-Value="model.DefaultValue" Label="Default value (YYYY-MM-DD)"
+                                      ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
                                       Variant="Variant.Outlined" Placeholder="No default" />
                         break;
                     default: // Text
                         <MudTextField T="string" @bind-Value="model.DefaultValue" Label="Default value"
+                                      ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
                                       Variant="Variant.Outlined" Placeholder="No default" MaxLength="200" />
                         break;
                 }
@@ -82,7 +102,11 @@
             <MudDivider Class="my-3" />
             <div class="d-flex justify-space-between align-center mb-2">
                 <MudText Typo="Typo.subtitle1">Options</MudText>
-                <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddOption">Add option</MudButton>
+                @* Hide the add button on system fields — the option set is part of the locked structure. *@
+                @if (!model.IsSystem)
+                {
+                    <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddOption">Add option</MudButton>
+                }
             </div>
             @if (model.Options.Count == 0)
             {
@@ -92,13 +116,18 @@
             {
                 <MudGrid Class="align-center mb-1">
                     <MudItem xs="4">
-                        <MudTextField T="string" Placeholder="Value" @bind-Value="opt.Value" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        <MudTextField T="string" Placeholder="Value" @bind-Value="opt.Value"
+                                      ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" />
                     </MudItem>
                     <MudItem xs="4">
-                        <MudTextField T="string" Placeholder="Label" @bind-Value="opt.Label" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        <MudTextField T="string" Placeholder="Label" @bind-Value="opt.Label"
+                                      ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" />
                     </MudItem>
                     <MudItem xs="3">
                         <MudSelect T="string" @bind-Value="opt.Icon" Clearable="true" Dense="true" Margin="Margin.Dense"
+                                   ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
                                    Variant="Variant.Outlined" Placeholder="Icon"
                                    AdornmentIcon="@TimeTracker.Web.Theme.EntryIconPalette.Resolve(opt.Icon)"
                                    Adornment="@(TimeTracker.Web.Theme.EntryIconPalette.Resolve(opt.Icon) is null ? Adornment.None : Adornment.Start)"
@@ -114,8 +143,11 @@
                         </MudSelect>
                     </MudItem>
                     <MudItem xs="1">
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
-                                       OnClick="@(() => RemoveOption(opt))" />
+                        @if (!model.IsSystem)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                           OnClick="@(() => RemoveOption(opt))" />
+                        }
                     </MudItem>
                 </MudGrid>
             }
@@ -164,6 +196,7 @@
                 IsActive = f.IsActive,
                 OrganizationRoleId = f.OrganizationRoleId,
                 DefaultValue = f.DefaultValue,
+                IsSystem = f.IsSystem,
                 Options = f.Options.Select(o => new OptionEditModel { Value = o.Value, Label = o.Label, Icon = o.Icon }).ToList(),
             };
         }
@@ -238,6 +271,7 @@
         public bool IsActive { get; set; } = true;
         public int? OrganizationRoleId { get; set; }
         public string? DefaultValue { get; set; }
+        public bool IsSystem { get; set; }
         public List<OptionEditModel> Options { get; set; } = new();
     }
 

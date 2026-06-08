@@ -11,6 +11,9 @@ public record EntryFieldOptionInput(string Value, string Label, int SortOrder, s
 /// <summary>Full admin view of a configurable field, including inactive ones.</summary>
 /// <param name="DefaultValue">Stringified default; interpretation depends on DataType.
 /// Boolean: "true"/"false"/null. Select: must match one of Options[].Value. Number/Date/Text: literal.</param>
+/// <param name="IsSystem">True for fields the platform ships. UI locks Label/Key/Type/Default/Options;
+/// API rejects mutations to those properties (only IsRequired/IsActive/SortOrder/OrganizationRoleId
+/// are mutable). Cannot be hard-deleted (deactivate via IsActive instead).</param>
 public record EntryFieldAdminDto(
     int Id,
     string FieldKey,
@@ -22,6 +25,7 @@ public record EntryFieldAdminDto(
     int? OrganizationRoleId,
     string? OrganizationRoleName,
     string? DefaultValue,
+    bool IsSystem,
     IReadOnlyList<EntryFieldOptionInput> Options);
 
 /// <summary>Create/update payload for a configurable field.</summary>

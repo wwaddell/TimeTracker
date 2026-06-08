@@ -90,7 +90,17 @@ else
                 <MudTh>Role</MudTh><MudTh>Active</MudTh><MudTh>Sort</MudTh><MudTh></MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd>@context.Label</MudTd>
+                <MudTd>
+                    <div class="d-flex align-center" style="gap:.4rem">
+                        @context.Label
+                        @if (context.IsSystem)
+                        {
+                            <MudTooltip Text="System field: structure is locked. Only Required, Active, Sort, and Role are editable.">
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info">System</MudChip>
+                            </MudTooltip>
+                        }
+                    </div>
+                </MudTd>
                 <MudTd><code>@context.FieldKey</code></MudTd>
                 <MudTd>@context.DataType</MudTd>
                 <MudTd>@(context.IsRequired ? "Yes" : "No")</MudTd>
@@ -101,8 +111,12 @@ else
                     <MudTooltip Text="Edit">
                         <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenEditField(context))" />
                     </MudTooltip>
-                    <MudTooltip Text="Delete">
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteFieldAsync(context))" />
+                    @* Delete is replaced with Deactivate for system fields — the API enforces
+                       this too, but the icon hint matches the actual behavior. *@
+                    <MudTooltip Text="@(context.IsSystem ? "System field can't be deleted (will be deactivated)" : "Delete")">
+                        <MudIconButton Icon="@(context.IsSystem ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Delete)"
+                                       Color="@(context.IsSystem ? Color.Default : Color.Error)"
+                                       Size="Size.Small" OnClick="@(() => DeleteFieldAsync(context))" />
                     </MudTooltip>
                 </MudTd>
             </RowTemplate>

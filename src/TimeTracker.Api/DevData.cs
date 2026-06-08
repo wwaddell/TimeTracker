@@ -46,20 +46,22 @@ public static class DevData
         Grant(consultant, OrgRight.ManageFields);
         acme.Roles.Add(acmeAdmin);
         acme.Roles.Add(consultant);
+        // Seeded fields are flagged IsSystem so the admin lockdown applies on fresh dev DBs
+        // (matches the backfill in 20260608023320_AddFieldIsSystem for existing dev DBs).
         acme.TimeEntryFields.Add(new TimeEntryField
         {
             FieldKey = "project", Label = "Project", DataType = FieldDataType.Text,
-            IsRequired = true, SortOrder = 1, CreatedUtc = DateTime.UtcNow,
+            IsRequired = true, SortOrder = 1, IsSystem = true, CreatedUtc = DateTime.UtcNow,
         });
         acme.TimeEntryFields.Add(new TimeEntryField
         {
             FieldKey = "billable", Label = "Billable", DataType = FieldDataType.Boolean,
-            IsRequired = false, SortOrder = 2, CreatedUtc = DateTime.UtcNow,
+            IsRequired = false, SortOrder = 2, IsSystem = true, CreatedUtc = DateTime.UtcNow,
         });
         var category = new TimeEntryField
         {
             FieldKey = "category", Label = "Category", DataType = FieldDataType.Select,
-            IsRequired = false, SortOrder = 3, CreatedUtc = DateTime.UtcNow,
+            IsRequired = false, SortOrder = 3, IsSystem = true, CreatedUtc = DateTime.UtcNow,
         };
         category.Options.Add(new TimeEntryFieldOption { Value = "meeting", Label = "Meeting", Icon = "meeting", SortOrder = 1 });
         category.Options.Add(new TimeEntryFieldOption { Value = "development", Label = "Development", Icon = "development", SortOrder = 2 });

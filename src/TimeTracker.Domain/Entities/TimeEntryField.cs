@@ -27,6 +27,15 @@ public class TimeEntryField : AuditableEntity
     public bool IsActive { get; set; } = true;
 
     /// <summary>
+    /// True for fields the platform ships seeded (Project, Billable, Category, …). Admins can
+    /// still toggle IsRequired / IsActive / SortOrder / OrganizationRoleId on these, but
+    /// FieldKey / Label / DataType / DefaultValue / Options are locked, and the row cannot
+    /// be hard-deleted. Stored as a flag so the lockdown survives data-only changes — and
+    /// so new system fields can be introduced via migration HasData seeds.
+    /// </summary>
+    public bool IsSystem { get; set; }
+
+    /// <summary>
     /// Optional default value pre-filled on new entries when the user hasn't set this field.
     /// Stored as a string regardless of DataType, interpreted by the consumer:
     /// Boolean ⇒ "true"/"false"/null (null = no default); Select ⇒ must match one of
