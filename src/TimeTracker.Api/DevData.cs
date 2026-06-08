@@ -48,11 +48,9 @@ public static class DevData
         acme.Roles.Add(consultant);
         // Seeded fields are flagged IsSystem so the admin lockdown applies on fresh dev DBs
         // (matches the backfill in 20260608023320_AddFieldIsSystem for existing dev DBs).
-        acme.TimeEntryFields.Add(new TimeEntryField
-        {
-            FieldKey = "project", Label = "Project", DataType = FieldDataType.Text,
-            IsRequired = true, SortOrder = 1, IsSystem = true, CreatedUtc = DateTime.UtcNow,
-        });
+        // NOTE: the legacy "project" configurable field is no longer seeded — Project is now
+        // a first-class entity (t_project) with its own picker. Both rendering side-by-side
+        // on the entry form was confusing; see RemoveLegacyProjectConfigField migration.
         acme.TimeEntryFields.Add(new TimeEntryField
         {
             FieldKey = "billable", Label = "Billable", DataType = FieldDataType.Boolean,

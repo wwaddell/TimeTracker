@@ -141,10 +141,9 @@ else
                 }
                 var missing = MissingLabels(entry);
                 var attrs = entry.Attributes.Where(a => !string.IsNullOrWhiteSpace(a.Value) && a.Value != "false").ToList();
-                // Header = Project / Task (bold). Prefer the first-class ProjectName (FK) over
-                // the legacy "Project" attribute, but keep the attribute fallback for old data.
-                var legacyProject = attrs.FirstOrDefault(a => string.Equals(a.Label, "Project", StringComparison.OrdinalIgnoreCase));
-                var projectName = entry.ProjectName ?? legacyProject?.Value;
+                // Header = Project / Task (bold). Project comes from the first-class FK now;
+                // the old "Project" custom-field fallback was removed alongside its DB row.
+                var projectName = entry.ProjectName;
                 var headerParts = new List<string>();
                 if (!string.IsNullOrWhiteSpace(projectName)) { headerParts.Add(projectName); }
                 if (entry.TaskTitle is not null) { headerParts.Add(entry.TaskTitle); }
@@ -157,10 +156,8 @@ else
                     ?? (!string.IsNullOrWhiteSpace(projectName) ? Icons.Material.Filled.Folder
                         : entry.TaskTitle is not null ? Icons.Material.Filled.Assignment
                         : Icons.Material.Filled.Schedule);
-                // Below: hide the legacy Project attribute (it's in the header) and Category (icon).
-                var detailAttrs = attrs.Where(a =>
-                    (legacyProject is null || a.FieldId != legacyProject.FieldId)
-                    && (cat.Icon is null || a.FieldId != cat.FieldId)).ToList();
+                // Below: hide Category (already shown as the lead icon). Other attrs render as chips.
+                var detailAttrs = attrs.Where(a => cat.Icon is null || a.FieldId != cat.FieldId).ToList();
                 <MudPaper Class="pa-4" Outlined="true" Style="cursor:pointer"
                           @onclick="@(() => OpenEdit(entry))">
                     <div class="d-flex justify-space-between" style="gap:1rem">
