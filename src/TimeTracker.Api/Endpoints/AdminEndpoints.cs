@@ -131,15 +131,14 @@ public static class AdminEndpoints
                 return Results.NotFound();
             }
 
-            // System fields lock down structural properties: only IsRequired / IsActive /
-            // SortOrder / OrganizationRoleId can change. Skip the full validation in that
-            // case so a client sending the original (unchanged) Label/Key/Type doesn't hit
-            // the FieldKey-uniqueness check against itself.
+            // System fields lock down STRUCTURAL properties (Label / Key / Type / Options).
+            // Operational settings stay editable — those are per-org admin preferences:
+            //   IsRequired, IsActive, SortOrder, OrganizationRoleId, DefaultValue.
+            // Skip the full ValidateAsync so a client sending the unchanged Label/Key/Type
+            // doesn't hit the FieldKey-uniqueness check against itself. Do the targeted
+            // checks that still matter for the operational slice.
             if (field.IsSystem)
             {
-                field.IsRequired = req.IsRequired;
-                field.SortOrder = req.SortOrder;
-                field.IsActive = req.IsActive;
                 if (req.OrganizationRoleId is { } roleId &&
                     !await db.OrganizationRoles.AnyAsync(r => r.Id == roleId && r.OrganizationId == orgId))
                 {
@@ -148,7 +147,20 @@ public static class AdminEndpoints
                         ["organizationRoleId"] = ["The selected role does not belong to this organization."],
                     });
                 }
+
+                // DefaultValue is editable; validate it against the field's existing DataType
+                // and existing Options (NOT what the client tried to send for those — those
+                // are locked). Reuse the same per-type rules as the create/update path.
+                if (ValidateDefaultValueForSystemField(field, req.DefaultValue) is { } defErr)
+                {
+                    return defErr;
+                }
+
+                field.IsRequired = req.IsRequired;
+                field.SortOrder = req.SortOrder;
+                field.IsActive = req.IsActive;
                 field.OrganizationRoleId = req.OrganizationRoleId;
+                field.DefaultValue = NormalizeDefaultValueForType(field.DataType, req.DefaultValue);
                 field.ModifiedUtc = DateTime.UtcNow;
                 await db.SaveChangesAsync();
                 return Results.Ok(new { field.Id });
@@ -310,18 +322,77 @@ public static class AdminEndpoints
 
     // Empty / whitespace ⇒ null (no default). Booleans are lowercased so the stored form is
     // canonical regardless of how the client wrote it.
-    private static string? NormalizeDefaultValue(SaveEntryFieldRequest req)
+    private static string? NormalizeDefaultValue(SaveEntryFieldRequest req) =>
+        NormalizeDefaultValueForType(req.DataType, req.DefaultValue);
+
+    private static string? NormalizeDefaultValueForType(FieldDataType dataType, string? raw)
     {
-        var def = req.DefaultValue?.Trim();
+        var def = raw?.Trim();
         if (string.IsNullOrEmpty(def))
         {
             return null;
         }
-        if (req.DataType == FieldDataType.Boolean)
+        if (dataType == FieldDataType.Boolean)
         {
             return string.Equals(def, "true", StringComparison.OrdinalIgnoreCase) ? "true" : "false";
         }
         return def;
+    }
+
+    // System-field path: validate a default-value change against the field's EXISTING
+    // DataType and Options (the locked side). Mirrors the per-type rules from ValidateAsync.
+    private static IResult? ValidateDefaultValueForSystemField(TimeEntryField field, string? raw)
+    {
+        var def = raw?.Trim();
+        if (string.IsNullOrEmpty(def))
+        {
+            return null; // empty = no default; always allowed.
+        }
+        if (def.Length > 200)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["defaultValue"] = ["Default value must be 200 characters or fewer."],
+            });
+        }
+        switch (field.DataType)
+        {
+            case FieldDataType.Boolean:
+                if (!string.Equals(def, "true", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(def, "false", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Results.ValidationProblem(new Dictionary<string, string[]>
+                    {
+                        ["defaultValue"] = ["Boolean default must be true, false, or empty (no default)."],
+                    });
+                }
+                break;
+            case FieldDataType.Number:
+                if (!decimal.TryParse(def, System.Globalization.NumberStyles.Number,
+                    System.Globalization.CultureInfo.InvariantCulture, out _))
+                {
+                    return Results.ValidationProblem(new Dictionary<string, string[]>
+                    {
+                        ["defaultValue"] = ["Number default must be a valid number."],
+                    });
+                }
+                break;
+            case FieldDataType.Select:
+                var validValues = field.Options
+                    .Where(o => !string.IsNullOrWhiteSpace(o.Value))
+                    .Select(o => o.Value)
+                    .ToHashSet(StringComparer.Ordinal);
+                if (!validValues.Contains(def))
+                {
+                    return Results.ValidationProblem(new Dictionary<string, string[]>
+                    {
+                        ["defaultValue"] = ["Select default must match one of the defined option values."],
+                    });
+                }
+                break;
+                // Date and Text accept anything; client picker enforces format.
+        }
+        return null;
     }
 
     private static void ApplyOptions(TimeEntryField field, SaveEntryFieldRequest req)

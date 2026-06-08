@@ -7,11 +7,12 @@
     <DialogContent>
         @if (model.IsSystem)
         {
-            @* Visible banner so the admin knows what's editable and why. *@
+            @* Visible banner so the admin knows what's editable and why. Default value is
+               operational (per-org admin preference) and stays editable; the structure is not. *@
             <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
-                <b>System field</b> — the structure (label, key, type, options, default) is fixed.
-                You can still control whether this field is required, active, where it sorts, and
-                which role sees it.
+                <b>System field</b> — the structure (label, key, type, options) is fixed.
+                You can still set the default value and control whether this field is required,
+                active, where it sorts, and which role sees it.
             </MudAlert>
         }
         <MudGrid>
@@ -53,14 +54,13 @@
             </MudItem>
 
             @* Type-aware default value. Stored as a string regardless; the input shape
-               adapts so the admin can't enter a default that won't validate. Locked for
-               system fields — defaults are part of the structural definition. *@
+               adapts so the admin can't enter a default that won't validate. Editable for
+               system fields too — defaults are a per-org admin preference, not structure. *@
             <MudItem xs="12" sm="6">
                 @switch (model.DataType)
                 {
                     case FieldDataType.Boolean:
                         <MudSelect T="string" @bind-Value="model.DefaultValue" Label="Default value"
-                                   ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
                                    Variant="Variant.Outlined" Clearable="true" Placeholder="No default">
                             <MudSelectItem T="string" Value="@((string?)null)">No default (null)</MudSelectItem>
                             <MudSelectItem T="string" Value="@("true")">True</MudSelectItem>
@@ -69,7 +69,6 @@
                         break;
                     case FieldDataType.Select:
                         <MudSelect T="string" @bind-Value="model.DefaultValue" Label="Default value"
-                                   ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
                                    Variant="Variant.Outlined" Clearable="true" Placeholder="No default">
                             <MudSelectItem T="string" Value="@((string?)null)">No default</MudSelectItem>
                             @foreach (var opt in model.Options.Where(o => !string.IsNullOrWhiteSpace(o.Value)))
@@ -80,17 +79,14 @@
                         break;
                     case FieldDataType.Number:
                         <MudTextField T="string" @bind-Value="model.DefaultValue" Label="Default value"
-                                      ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
                                       Variant="Variant.Outlined" Placeholder="No default" InputType="InputType.Number" />
                         break;
                     case FieldDataType.Date:
                         <MudTextField T="string" @bind-Value="model.DefaultValue" Label="Default value (YYYY-MM-DD)"
-                                      ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
                                       Variant="Variant.Outlined" Placeholder="No default" />
                         break;
                     default: // Text
                         <MudTextField T="string" @bind-Value="model.DefaultValue" Label="Default value"
-                                      ReadOnly="@model.IsSystem" Disabled="@model.IsSystem"
                                       Variant="Variant.Outlined" Placeholder="No default" MaxLength="200" />
                         break;
                 }
