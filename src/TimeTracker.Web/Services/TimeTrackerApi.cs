@@ -163,6 +163,9 @@ public class TimeTrackerApi(HttpClient http)
     public async Task<ApiResult> SetMemberRolesAsync(int orgId, int userId, SetMemberRolesRequest request) =>
         await SendAsync(() => http.PutAsJsonAsync($"/api/organizations/{orgId}/members/{userId}/roles", request));
 
+    public async Task<ApiResult> UpdateMemberProfileAsync(int orgId, int userId, UpdateMemberProfileRequest request) =>
+        await SendAsync(() => http.PutAsJsonAsync($"/api/organizations/{orgId}/members/{userId}", request));
+
     public async Task<ApiResult> RemoveMemberAsync(int orgId, int userId) =>
         await SendAsync(() => http.DeleteAsync($"/api/organizations/{orgId}/members/{userId}"));
 

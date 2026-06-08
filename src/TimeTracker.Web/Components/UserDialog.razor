@@ -5,20 +5,32 @@
 
 <MudDialog>
     <DialogContent>
-        @if (Existing is null)
-        {
-            <MudTextField T="string" Label="Email" @bind-Value="email" Required="true"
-                          Variant="Variant.Outlined" Class="mb-3" />
-            <MudTextField T="string" Label="Display name (optional)" @bind-Value="displayName"
-                          Variant="Variant.Outlined" Class="mb-3" />
-        }
+        @* Email + name are now editable on both invite (new) and edit (existing). For an
+           existing user we PUT the profile only when the fields actually changed, so a Save
+           that only touched roles doesn't re-write the user row + trigger ModifiedUtc. *@
+        <MudTextField T="string" Label="Email" @bind-Value="email" Required="true"
+                      MaxLength="320" Counter="320"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField T="string" Label="Display name" @bind-Value="displayName"
+                      MaxLength="200" Counter="200"
+                      Variant="Variant.Outlined" Class="mb-3" />
+
         <MudSelect T="int" Label="Roles" MultiSelection="true" @bind-SelectedValues="selectedRoleIds"
-                   Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                   Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter" Class="mb-3">
             @foreach (var role in Roles)
             {
                 <MudSelectItem T="int" Value="@role.Id">@role.Name</MudSelectItem>
             }
         </MudSelect>
+
+        <MudSwitch T="bool" @bind-Value="sendInvite" Color="Color.Primary"
+                   Label="@(Existing is null ? "Send invitation email" : "Send invitation email after save")" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+            @(Existing is null
+                ? "On by default for new invites. Turn off to add someone silently."
+                : "Off by default. Turn on to (re)send the invite after saving the changes.")
+        </MudText>
+
         @if (error is not null)
         {
             <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@error</MudAlert>
@@ -27,7 +39,7 @@
     <DialogActions>
         <MudButton OnClick="Cancel">Cancel</MudButton>
         <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
-            @(saving ? "Saving…" : (Existing is null ? "Send invite" : "Save roles"))
+            @(saving ? "Saving…" : (Existing is null ? "Send invite" : "Save"))
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -41,8 +53,11 @@
     [Parameter] public MemberDto? Existing { get; set; }
 
     private string email = string.Empty;
-    private string? displayName;
+    private string displayName = string.Empty;
     private IReadOnlyCollection<int> selectedRoleIds = new HashSet<int>();
+    // Invite defaults: on for new (the typical case), off for edit (admin tweaks shouldn't
+    // re-mail the user by accident). Either can be toggled in the dialog.
+    private bool sendInvite;
     private bool saving;
     private string? error;
 
@@ -50,43 +65,85 @@
     {
         if (Existing is { } m)
         {
+            email = m.Email;
+            displayName = m.DisplayName;
             selectedRoleIds = m.Roles.Select(r => r.Id).ToHashSet();
+            sendInvite = false;
+        }
+        else
+        {
+            sendInvite = true;
         }
     }
 
     private async Task SaveAsync()
     {
         error = null;
-        if (Existing is null && (string.IsNullOrWhiteSpace(email) || !email.Contains('@')))
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
         {
             error = "A valid email is required.";
+            return;
+        }
+        if (Existing is not null && string.IsNullOrWhiteSpace(displayName))
+        {
+            error = "Display name is required."; // POST allows empty (falls back to email); PUT does not.
             return;
         }
 
         saving = true;
         try
         {
-            var result = Existing is null
-                ? await Api.InviteMemberAsync(OrgId, new InviteMemberRequest
-                {
-                    Email = email,
-                    DisplayName = displayName,
-                    RoleIds = selectedRoleIds.ToList(),
-                })
-                : await Api.SetMemberRolesAsync(OrgId, Existing.UserId, new SetMemberRolesRequest
-                {
-                    RoleIds = selectedRoleIds.ToList(),
-                });
-
-            if (result.Success)
+            if (Existing is null)
             {
-                Snackbar.Add(Existing is null ? "Invitation sent" : "Roles updated", Severity.Success);
-                MudDialog.Close(DialogResult.Ok(true));
+                var result = await Api.InviteMemberAsync(OrgId, new InviteMemberRequest
+                {
+                    Email = email.Trim(),
+                    DisplayName = string.IsNullOrWhiteSpace(displayName) ? null : displayName.Trim(),
+                    RoleIds = selectedRoleIds.ToList(),
+                    SendInvite = sendInvite,
+                });
+                if (!result.Success) { error = result.Error; return; }
+                Snackbar.Add(sendInvite ? "Invitation sent" : "Member added", Severity.Success);
             }
             else
             {
-                error = result.Error;
+                // Two separate endpoints; only fire each if its slice actually changed. This
+                // avoids surprising ModifiedUtc bumps + history rows for clicks that didn't
+                // change anything. The sendInvite toggle attaches to the profile call when
+                // either is dirty, or to a no-op profile save when nothing else changed.
+                var profileChanged = !string.Equals(email.Trim(), Existing.Email, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(displayName.Trim(), Existing.DisplayName, StringComparison.Ordinal);
+                var currentRoles = selectedRoleIds.ToHashSet();
+                var existingRoles = Existing.Roles.Select(r => r.Id).ToHashSet();
+                var rolesChanged = !currentRoles.SetEquals(existingRoles);
+
+                if (profileChanged || sendInvite)
+                {
+                    var pResult = await Api.UpdateMemberProfileAsync(OrgId, Existing.UserId, new UpdateMemberProfileRequest
+                    {
+                        Email = email.Trim(),
+                        DisplayName = displayName.Trim(),
+                        SendInvite = sendInvite,
+                    });
+                    if (!pResult.Success) { error = pResult.Error; return; }
+                }
+                if (rolesChanged)
+                {
+                    var rResult = await Api.SetMemberRolesAsync(OrgId, Existing.UserId, new SetMemberRolesRequest
+                    {
+                        RoleIds = selectedRoleIds.ToList(),
+                    });
+                    if (!rResult.Success) { error = rResult.Error; return; }
+                }
+                if (!profileChanged && !rolesChanged && !sendInvite)
+                {
+                    Snackbar.Add("No changes.", Severity.Info);
+                    MudDialog.Close(DialogResult.Cancel());
+                    return;
+                }
+                Snackbar.Add(sendInvite ? "Saved and invitation sent" : "Saved", Severity.Success);
             }
+            MudDialog.Close(DialogResult.Ok(true));
         }
         finally
         {
