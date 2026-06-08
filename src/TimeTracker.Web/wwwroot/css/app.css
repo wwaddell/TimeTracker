@@ -135,6 +135,12 @@ code {
     --tt-col-actions: 124px;
     --tt-col-gap: .5rem;
     overflow: hidden;
+    /* Container query reference: child media queries below trigger based on THIS element's
+       width, not the viewport. Without this, tablet portrait (768px viewport) hits the page
+       with a ~250px sidebar leaving ~500px for the table — too narrow for the 8-column row,
+       so the actions column got clipped by overflow:hidden. */
+    container-type: inline-size;
+    container-name: tt-tasks-container;
 }
 
 .tt-tasks__head,
@@ -222,8 +228,11 @@ code {
 .tt-col--progress { width: var(--tt-col-progress); }
 .tt-col--actions  { width: var(--tt-col-actions); text-align: right; white-space: nowrap; }
 
-/* Only collapse on truly narrow viewports (phones). Tablet / preview-pane widths keep the full row. */
-@media (max-width: 600px) {
+/* Collapse the secondary columns under the title when the table itself is too narrow to fit
+   the full 8-column row. 760px = the natural sum of fixed column widths + gaps + padding,
+   below which the actions column would otherwise be clipped by overflow:hidden. Container
+   queries (not @media) so this fires from sidebar narrowing too, not just small viewports. */
+@container tt-tasks-container (max-width: 760px) {
     .tt-tasks__head,
     .tt-tasks__line {
         grid-template-columns: var(--tt-col-pri) minmax(0, 1fr) var(--tt-col-actions);
