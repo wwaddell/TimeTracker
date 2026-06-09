@@ -1,0 +1,60 @@
+@*  Centered, branded card used by the auth-flow terminal pages (logged out, sign-in
+    failed, sign-out failed). Keeps a consistent look across MSAL's named slots without
+    duplicating layout in each one. *@
+
+<div class="tt-auth-stage">
+    <MudPaper Class="tt-auth-card pa-8" Elevation="3">
+        <div class="tt-auth-icon mb-4">
+            <MudIcon Icon="@Icon" Color="@IconColor" Size="Size.Large" />
+        </div>
+        <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-2">@Title</MudText>
+        @if (!string.IsNullOrWhiteSpace(Subtitle))
+        {
+            <MudText Typo="Typo.body1" Align="Align.Center" Class="mud-text-secondary mb-6">@Subtitle</MudText>
+        }
+        @if (!string.IsNullOrWhiteSpace(PrimaryLabel))
+        {
+            <div class="d-flex justify-center">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                           StartIcon="@Icons.Material.Filled.Login"
+                           OnClick="OnPrimaryClick">
+                    @PrimaryLabel
+                </MudButton>
+            </div>
+        }
+    </MudPaper>
+</div>
+
+<style>
+    /* Vertically + horizontally center within whatever viewport the layout gives us.
+       EmptyLayout has no nav or app bar so this fills the whole window. */
+    .tt-auth-stage {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+    .tt-auth-card {
+        width: 100%;
+        max-width: 28rem;
+        text-align: center;
+    }
+    .tt-auth-icon {
+        font-size: 3rem;
+        display: flex;
+        justify-content: center;
+    }
+    .tt-auth-icon .mud-icon-root {
+        font-size: 4rem !important;
+    }
+</style>
+
+@code {
+    [Parameter, EditorRequired] public string Icon { get; set; } = default!;
+    [Parameter] public Color IconColor { get; set; } = Color.Primary;
+    [Parameter, EditorRequired] public string Title { get; set; } = default!;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? PrimaryLabel { get; set; }
+    [Parameter] public EventCallback OnPrimaryClick { get; set; }
+}

@@ -10,12 +10,44 @@
       logout-failed         — sign-out error
       logged-out            — terminal success state for sign-out
       profile               — open the Entra-managed profile editor (rarely used)
-    Microsoft.Authentication.WebAssembly.Msal handles each case; we just have to host
-    the RemoteAuthenticatorView at this route. *@
+    The default render for terminal states is a blank page with a plain text line; we
+    override the user-facing ones (LogOutSucceeded, LogInFailed, LogOutFailed) with a
+    branded Mud card + a "Sign in" link so the page doesn't look broken. *@
 @layout EmptyLayout
+@inject NavigationManager Nav
 
-<RemoteAuthenticatorView Action="@Action" />
+<RemoteAuthenticatorView Action="@Action">
+    <LogOutSucceeded>
+        <AuthMessage Icon="@Icons.Material.Filled.WavingHand"
+                     IconColor="Color.Primary"
+                     Title="You're signed out"
+                     Subtitle="Thanks for using TimeTracker. Come back anytime."
+                     PrimaryLabel="Sign in again"
+                     OnPrimaryClick="SignInAgain" />
+    </LogOutSucceeded>
+    <LogInFailed>
+        <AuthMessage Icon="@Icons.Material.Filled.ErrorOutline"
+                     IconColor="Color.Error"
+                     Title="Sign-in didn't complete"
+                     Subtitle="@context"
+                     PrimaryLabel="Try again"
+                     OnPrimaryClick="SignInAgain" />
+    </LogInFailed>
+    <LogOutFailed>
+        <AuthMessage Icon="@Icons.Material.Filled.ErrorOutline"
+                     IconColor="Color.Warning"
+                     Title="Sign-out didn't complete"
+                     Subtitle="@context"
+                     PrimaryLabel="Return to app"
+                     OnPrimaryClick="ReturnHome" />
+    </LogOutFailed>
+</RemoteAuthenticatorView>
 
 @code {
     [Parameter] public string? Action { get; set; }
+
+    // Re-initiate the auth code flow from the same page MSAL drives sign-in through.
+    private void SignInAgain() => Nav.NavigateToLogin("authentication/login");
+
+    private void ReturnHome() => Nav.NavigateTo("/");
 }
