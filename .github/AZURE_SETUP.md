@@ -73,7 +73,7 @@ az webapp create -g $RG -p $PLAN -n $APP_NAME --runtime "DOTNETCORE:10.0"
 
 `App Service → Settings → Environment variables → Connection strings`. Add:
 
-- **Name**: `Default`
+- **Name**: `TimeTracker`
 - **Type**: `SQLAzure`
 - **Value**:
 
@@ -81,18 +81,19 @@ az webapp create -g $RG -p $PLAN -n $APP_NAME --runtime "DOTNETCORE:10.0"
 Server=tcp:<sql-server>.database.windows.net,1433;Database=timetracker;User ID=<sql-admin>;Password=<password>;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;
 ```
 
-The API resolves `ConnectionStrings:Default`. Connection strings set this way are exposed
-to the app as `SQLAZURECONNSTR_Default` and override the `appsettings.json` value
-automatically — no code change needed.
+The API resolves `ConnectionStrings:TimeTracker` (see `Infrastructure/DependencyInjection.cs`).
+Connection strings set this way are exposed to the app as `SQLAZURECONNSTR_TimeTracker`
+and override the `appsettings.json` value automatically — no code change needed.
 
 ### App settings
 
 Same screen, *Application settings* tab:
 
 - `ASPNETCORE_ENVIRONMENT` = `Production` (default is fine, but set it explicitly).
-- `Jwt__Authority`, `Jwt__Audience` — paste the production OIDC issuer + audience once
-  the real identity provider is wired up. **Until then**, the dev backdoor is the only
-  auth path; do not expose the site publicly without setting these.
+- `Auth__Authority`, `Auth__Audience` — paste the production OIDC issuer + audience once
+  the real identity provider is wired up (Program.cs reads `Auth:Authority` / `Auth:Audience`).
+  **Until then**, the dev backdoor is the only auth path; do not expose the site publicly
+  without setting these.
 
 ### Logs
 
