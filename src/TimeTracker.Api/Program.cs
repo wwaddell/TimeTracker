@@ -132,12 +132,14 @@ if (!app.Environment.IsDevelopment())
 
 // Hosted Blazor: serve the WASM client's static files from the same App Service.
 // UseBlazorFrameworkFiles sets Blazor's base path + MIME types for /_framework/*.
-// MapStaticAssets (.NET 9+) is the endpoint-routed static file server that ALSO resolves
-// the `#[.{fingerprint}]` placeholders in index.html against the publish-time manifest
-// at TimeTracker.Api.staticwebassets.endpoints.json. Without it, the literal `#` in
-// index.html acts as a URL fragment and the browser 404s on the unresolved asset.
-// Note: MapStaticAssets is registered later among the endpoint mappings, not here.
+// UseStaticFiles serves everything else from wwwroot. We deliberately do NOT use
+// MapStaticAssets here — it's the .NET 9+ endpoint-routed alternative, but it forces
+// UseRouting/UseEndpoints insertion that doesn't compose cleanly with our minimal-API
+// pipeline (we hit "request reached the end of the pipeline without executing the
+// endpoint" with that approach). Static-asset fingerprinting is disabled in the Web
+// project csproj so plain filenames (blazor.webassembly.js, etc.) exist on disk.
 app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
 
 app.UseCors(WebCorsPolicy);
 app.UseAuthentication();
@@ -171,14 +173,9 @@ app.MapGlobalAdminEndpoints();
 app.MapMeEndpoints();
 app.MapProjectEndpoints();
 
-// Endpoint-routed static file serving with fingerprint resolution. See the comment up by
-// UseBlazorFrameworkFiles for why this is required for .NET 10's #[.{fingerprint}] syntax
-// in index.html. Must come after the API endpoint mappings so /api/* still wins.
-app.MapStaticAssets();
-
 // SPA fallback: any non-API, non-static path falls through to index.html so client-side
 // routing (Blazor) handles it. /api/* won't reach here because the minimal API endpoints
-// above match first.
+// above match first; static files are intercepted by UseStaticFiles earlier.
 app.MapFallbackToFile("index.html");
 
 app.Run();

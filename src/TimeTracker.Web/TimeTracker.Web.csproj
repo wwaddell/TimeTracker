@@ -4,7 +4,17 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <!-- Disable .NET 10's static-asset fingerprinting for the Hosted Blazor scenario.
+         When the API project hosts this WASM client via project ref, the publish path
+         doesn't run the HTML-placeholder substitution, leaving literal `#[.{fingerprint}]`
+         in index.html — which the browser treats as a URL fragment, breaking the
+         bootloader. Fingerprinting also forces MapStaticAssets endpoint routing in the
+         host, which doesn't compose cleanly with our minimal-API pipeline. Disabling it
+         here keeps `_framework/blazor.webassembly.js` and the other bootstrap files at
+         their plain names so the host can serve them via UseStaticFiles. The Blazor
+         resource loader still fingerprints the inner .wasm/.dll assets at runtime via
+         its boot config, so cache-busting for those is preserved. -->
+    <StaticWebAssetFingerprintingEnabled>false</StaticWebAssetFingerprintingEnabled>
   </PropertyGroup>
 
   <ItemGroup>
