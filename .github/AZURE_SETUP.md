@@ -89,11 +89,31 @@ and override the `appsettings.json` value automatically — no code change neede
 
 Same screen, *Application settings* tab:
 
+- `WEBSITES_CONTAINER_START_TIME_LIMIT` = `1800` — Linux App Service's default warmup
+  timeout is 230 seconds. First boot has to wake Azure SQL Serverless (~30–60s) AND
+  apply ~25 EF migrations to an empty DB (~30–60s); together that frequently exceeds
+  230s and Azure kills the container before it can bind to a port. Bumping to 30 minutes
+  is harmless for normal operation — only affects the boot probe.
+- `Auth__UseDevBypass` = `true` (TEMPORARY) — enables the dev backdoor so anyone hitting
+  the site is auto-authenticated as the stand-in user. Useful for first-deploy demos
+  before Entra is wired. **Remove the moment real auth is in place** (the startup log
+  prints a loud warning while it's on).
 - `ASPNETCORE_ENVIRONMENT` = `Production` (default is fine, but set it explicitly).
 - `Auth__Authority`, `Auth__Audience` — paste the production OIDC issuer + audience once
   the real identity provider is wired up (Program.cs reads `Auth:Authority` / `Auth:Audience`).
-  **Until then**, the dev backdoor is the only auth path; do not expose the site publicly
-  without setting these.
+
+### Startup command (required)
+
+`Settings → Configuration → General settings → Stack settings → Startup Command`:
+
+```
+dotnet TimeTracker.Api.dll
+```
+
+This is **not** optional. The publish output includes both `TimeTracker.Api.dll` and
+`TimeTracker.Web.dll` (Web is project-referenced for the Hosted bundle), so Linux
+App Service's Oryx auto-detector can't decide which is the entry point and falls back
+to serving Azure's default placeholder page. The explicit startup command tells it.
 
 ### Logs
 
@@ -147,7 +167,45 @@ exception.
 
 ---
 
-## 5. Day-2 operations
+## 5. Custom domain + TLS
+
+Default URL is `https://<APP_NAME>.azurewebsites.net`. To bind a custom hostname
+(e.g. `time.wrdata.com`):
+
+1. **Portal → App Service → Settings → Custom domains → Add custom domain.**
+   - *Domain provider*: All other domain services
+   - *TLS/SSL certificate*: App Service Managed Certificate (free, auto-renewed)
+   - *TLS/SSL type*: SNI SSL
+   - *Domain*: the hostname you want
+   - Azure shows two values you'll need at the DNS provider:
+     - **CNAME target** = `<APP_NAME>.azurewebsites.net`
+     - **Verification ID** (long alphanumeric string)
+   - Leave this blade open.
+
+2. **At your DNS provider** (GoDaddy / Cloudflare / Route 53), add:
+
+   | Type | Name | Value |
+   | --- | --- | --- |
+   | CNAME | `<subdomain>` | `<APP_NAME>.azurewebsites.net` |
+   | TXT | `asuid.<subdomain>` | The verification ID from step 1 |
+
+   Set TTL to 1 hour for setup; raise later. Sanity check from any shell:
+
+   ```bash
+   nslookup <fqdn>
+   nslookup -type=TXT asuid.<fqdn>
+   ```
+
+3. **Back in Azure**: click *Validate* — both checks should go green. Click *Add*.
+   Azure provisions the managed cert (30s–a few minutes) and binds the hostname.
+
+4. **Force HTTPS**: same Custom domains page → toggle **HTTPS Only** to On.
+
+The original `azurewebsites.net` URL keeps working as a fallback. Useful for diagnostics.
+
+---
+
+## 6. Day-2 operations
 
 - **Roll back**: redeploy a prior commit from the Actions tab → workflow run → *Re-run all jobs*.
 - **Schema changes**: ship the migration with the code; it applies on the next startup.
