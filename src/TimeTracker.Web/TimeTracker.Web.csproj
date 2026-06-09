@@ -20,6 +20,14 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.6" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.6" PrivateAssets="all" />
+    <!-- MSAL-based OIDC for Blazor WASM: handles the auth-code-with-PKCE flow against
+         Entra External ID, manages the in-browser token cache, and exposes
+         BaseAddressAuthorizationMessageHandler so the API HttpClient attaches a Bearer
+         token to every same-origin call. -->
+    <PackageReference Include="Microsoft.Authentication.WebAssembly.Msal" Version="10.0.6" />
+    <!-- AddHttpClient + IHttpClientFactory for the named API client that gets the
+         BaseAddressAuthorizationMessageHandler attached. -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
     <PackageReference Include="MudBlazor" Version="9.5.0" />
   </ItemGroup>
 

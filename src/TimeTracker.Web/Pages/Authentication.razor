@@ -1,0 +1,21 @@
+@page "/authentication/{action}"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@*  MSAL's required callback router. The {action} parameter is one of:
+      login                 — initiate sign-in
+      login-callback        — Entra redirects here after sign-in (configured in the app
+                              registration as the SPA redirect URI)
+      login-failed          — sign-in error
+      logout                — initiate sign-out
+      logout-callback       — Entra redirects here after sign-out
+      logout-failed         — sign-out error
+      logged-out            — terminal success state for sign-out
+      profile               — open the Entra-managed profile editor (rarely used)
+    Microsoft.Authentication.WebAssembly.Msal handles each case; we just have to host
+    the RemoteAuthenticatorView at this route. *@
+@layout EmptyLayout
+
+<RemoteAuthenticatorView Action="@Action" />
+
+@code {
+    [Parameter] public string? Action { get; set; }
+}

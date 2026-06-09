@@ -1,0 +1,8 @@
+@*  Chrome-less layout for the MSAL callback page. During the brief moment between
+    landing on /authentication/login-callback and the redirect home, we don't want the
+    nav drawer + app bar to flash. *@
+@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="Theme.AppTheme.Instance" />
+
+@Body

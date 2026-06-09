@@ -24,6 +24,15 @@
         <MudTooltip Text="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")">
             <MudIconButton Icon="@DarkModeIcon" Color="Color.Inherit" OnClick="@ToggleDarkMode" />
         </MudTooltip>
+        @* Only render the sign-out chip when MSAL is actually configured — otherwise the
+           dev backdoor is in play and there's no session to clear. *@
+        <AuthorizeView>
+            <Authorized>
+                <MudTooltip Text="Sign out">
+                    <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" OnClick="SignOut" />
+                </MudTooltip>
+            </Authorized>
+        </AuthorizeView>
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen" Elevation="1" ClipMode="DrawerClipMode.Always" Variant="@DrawerVariant.Responsive">
@@ -99,6 +108,9 @@
     }
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    // MSAL takes the user to Entra's logout endpoint, then back to /authentication/logout-callback.
+    private void SignOut() => Nav.NavigateToLogout("authentication/logout");
 
     private async Task ToggleDarkMode()
     {

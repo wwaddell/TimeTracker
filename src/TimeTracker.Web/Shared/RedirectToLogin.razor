@@ -1,0 +1,15 @@
+@* Triggered by AuthorizeRouteView's <NotAuthorized> when the user has no identity yet.
+   Captures the URL the user was trying to reach in `returnUrl` so MSAL's callback page
+   can route them back after a successful sign-in. *@
+@inject NavigationManager Nav
+
+@code {
+    protected override void OnInitialized()
+    {
+        Nav.NavigateToLogin("authentication/login", new InteractiveRequestOptions
+        {
+            ReturnUrl = Nav.Uri,
+            Interaction = InteractionType.SignIn,
+        });
+    }
+}

@@ -1,6 +1,29 @@
-﻿<Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
-    <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)"/>
-        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
-    </Found>
-</Router>
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+        <Found Context="routeData">
+            @* AuthorizeRouteView replaces RouteView so [Authorize] on a page is honored.
+               Pages that don't carry [Authorize] are accessible to everyone — useful for
+               the /authentication callback page and any future landing/about page. *@
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    @if (context.User.Identity?.IsAuthenticated != true)
+                    {
+                        @* Not signed in at all — bounce to the Entra login. RedirectToLogin
+                           captures the originally-requested URL so we land back here on
+                           return. *@
+                        <RedirectToLogin />
+                    }
+                    else
+                    {
+                        @* Authenticated but missing a role / claim the page demanded.
+                           Show a friendly message rather than another login attempt. *@
+                        <MudAlert Severity="Severity.Warning" Class="ma-6">
+                            You don't have permission to view this page.
+                        </MudAlert>
+                    }
+                </NotAuthorized>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+    </Router>
+</CascadingAuthenticationState>
