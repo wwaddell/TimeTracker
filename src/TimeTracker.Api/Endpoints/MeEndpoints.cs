@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TimeTracker.Api.Auth;
 using TimeTracker.Contracts.Me;
+using TimeTracker.Domain.Enums;
 using TimeTracker.Infrastructure.Persistence;
 
 namespace TimeTracker.Api.Endpoints;
@@ -27,9 +28,39 @@ public static class MeEndpoints
                 .Where(m => m.UserId == userId && m.IsDefault)
                 .Select(m => (int?)m.OrganizationId)
                 .FirstOrDefaultAsync();
+
+            // Per-org rights, used by the Web nav to hide links the user can't act on.
+            // Global admins get every right pre-populated so the nav matches their actual
+            // access; the API's HasRightAsync also short-circuits for them.
+            var allRights = Enum.GetValues<OrgRight>().Select(r => r.ToString()).ToArray();
+            IReadOnlyDictionary<int, IReadOnlyList<string>> orgRights;
+            if (isGlobalAdmin)
+            {
+                var orgIds = await db.UserOrganizations.AsNoTracking()
+                    .Where(m => m.UserId == userId)
+                    .Select(m => m.OrganizationId)
+                    .ToListAsync();
+                orgRights = orgIds.ToDictionary(id => id, _ => (IReadOnlyList<string>)allRights);
+            }
+            else
+            {
+                // Walk: user-org → role-links → role.rights. Distinct names per org.
+                var rows = await db.UserOrganizations.AsNoTracking()
+                    .Where(m => m.UserId == userId)
+                    .SelectMany(m => m.Roles.SelectMany(r =>
+                        db.OrganizationRoleRights.Where(rr => rr.OrganizationRoleId == r.OrganizationRoleId)
+                            .Select(rr => new { m.OrganizationId, rr.Right })))
+                    .ToListAsync();
+                orgRights = rows
+                    .GroupBy(r => r.OrganizationId)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => (IReadOnlyList<string>)g.Select(r => r.Right.ToString()).Distinct().ToList());
+            }
+
             return Results.Ok(new MeDto(user.Id, user.DisplayName, user.Email,
                 isGlobalAdmin, user.HideOrgSwitcher, user.DarkMode, user.CompactMode,
-                (int)user.WeekStartsOn, defaultOrgId));
+                (int)user.WeekStartsOn, defaultOrgId, orgRights));
         });
 
         // Update the user's personal preferences (default org + show/hide org switcher).

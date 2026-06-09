@@ -1,7 +1,13 @@
 namespace TimeTracker.Contracts.Me;
 
-/// <summary>The current user, as needed by the profile page.</summary>
+/// <summary>The current user, as needed by the profile page and the nav-hide logic.</summary>
 /// <param name="WeekStartsOn">First day of the week (Sunday=0..Saturday=6); drives "group by week" totals.</param>
+/// <param name="OrgRights">
+/// Per-org rights the user holds, by organization id → list of OrgRight enum names
+/// (ManageOrganization, ManageUsers, ManageRoles, ManageFields, ViewReports, ManageProjects).
+/// Strings instead of the enum keep this contract decoupled from the Domain assembly.
+/// Global admins get every right pre-populated for every org they belong to.
+/// </param>
 public record MeDto(
     int Id,
     string DisplayName,
@@ -11,7 +17,8 @@ public record MeDto(
     bool DarkMode,
     bool CompactMode,
     int WeekStartsOn,
-    int? DefaultOrganizationId);
+    int? DefaultOrganizationId,
+    IReadOnlyDictionary<int, IReadOnlyList<string>> OrgRights);
 
 /// <summary>
 /// Update the user's personal preferences. All fields are optional — null means

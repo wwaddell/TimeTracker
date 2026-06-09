@@ -11,6 +11,10 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 
+@*  Cascade the fetched MeDto so any descendant component can pick it up instead of
+    re-fetching /api/me on its own. Existing pages that still call Api.GetMeAsync()
+    keep working unchanged; they can migrate to the cascading value over time. *@
+<CascadingValue Value="_me" Name="Me">
 <MudLayout>
     <MudAppBar Elevation="1">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
@@ -37,17 +41,45 @@
 
     <MudDrawer @bind-Open="_drawerOpen" Elevation="1" ClipMode="DrawerClipMode.Always" Variant="@DrawerVariant.Responsive">
         <MudNavMenu>
+            @* Top-level: every signed-in user can log time, view tasks, import calendar. *@
             <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Schedule">Log Time</MudNavLink>
             <MudNavLink Href="tasks" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Checklist">Tasks</MudNavLink>
             <MudNavLink Href="import" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.CalendarMonth">Import from Outlook</MudNavLink>
-            <MudNavGroup Title="Administration" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="true">
-                <MudNavLink Href="admin/organizations" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Public">Global Admin</MudNavLink>
-                <MudNavLink Href="admin/organization" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Business">Organization</MudNavLink>
-                <MudNavLink Href="admin/projects" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.WorkOutline">Projects</MudNavLink>
-                <MudNavLink Href="admin/users" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">Users</MudNavLink>
-                <MudNavLink Href="admin/roles" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Badge">Roles</MudNavLink>
-                <MudNavLink Href="admin" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Tune">Fields</MudNavLink>
-            </MudNavGroup>
+
+            @* Administration group hides entirely if the user holds no admin right in
+               any org AND isn't a global admin. Otherwise each link is gated on a
+               specific right (matching the API's HasRightAsync check on the corresponding
+               endpoints). Until /api/me has been fetched, _me is null and we hide
+               everything to avoid a flash of admin items the user doesn't actually have. *@
+            @if (_me is not null && (_me.IsGlobalAdmin || HasAnyAdminRight()))
+            {
+                <MudNavGroup Title="Administration" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="true">
+                    @if (_me.IsGlobalAdmin)
+                    {
+                        <MudNavLink Href="admin/organizations" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Public">Global Admin</MudNavLink>
+                    }
+                    @if (HasRightInAnyOrg("ManageOrganization"))
+                    {
+                        <MudNavLink Href="admin/organization" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Business">Organization</MudNavLink>
+                    }
+                    @if (HasRightInAnyOrg("ManageProjects"))
+                    {
+                        <MudNavLink Href="admin/projects" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.WorkOutline">Projects</MudNavLink>
+                    }
+                    @if (HasRightInAnyOrg("ManageUsers"))
+                    {
+                        <MudNavLink Href="admin/users" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">Users</MudNavLink>
+                    }
+                    @if (HasRightInAnyOrg("ManageRoles"))
+                    {
+                        <MudNavLink Href="admin/roles" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Badge">Roles</MudNavLink>
+                    }
+                    @if (HasRightInAnyOrg("ManageFields"))
+                    {
+                        <MudNavLink Href="admin" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Tune">Fields</MudNavLink>
+                    }
+                </MudNavGroup>
+            }
         </MudNavMenu>
     </MudDrawer>
 
@@ -69,6 +101,7 @@
         </MudContainer>
     </MudMainContent>
 </MudLayout>
+</CascadingValue>
 
 @code {
     private MudThemeProvider _themeProvider = default!;
@@ -76,6 +109,7 @@
     private bool _drawerOpen = true;
     private bool _isDarkMode;
     private bool _prefsLoaded;
+    private MeDto? _me;
 
     // Clear the boundary on navigation so a previous page's error doesn't stick.
     protected override void OnParametersSet() => _errorBoundary?.Recover();
@@ -93,15 +127,17 @@
         }
         _prefsLoaded = true;
 
-        // Load dark-mode preference from the server (follows the user across devices);
-        // fall back to the OS setting when there's no API/auth yet.
+        // Single /api/me fetch that drives dark-mode preference AND nav-hiding.
+        // Cascaded down so children don't have to re-fetch.
         try
         {
-            var me = await Api.GetMeAsync();
-            _isDarkMode = me?.DarkMode ?? await _themeProvider.GetSystemDarkModeAsync();
+            _me = await Api.GetMeAsync();
+            _isDarkMode = _me?.DarkMode ?? await _themeProvider.GetSystemDarkModeAsync();
         }
         catch
         {
+            // Auth not yet established or the API is down — fall back to OS dark mode
+            // and leave the nav fully hidden until a retry succeeds.
             _isDarkMode = await _themeProvider.GetSystemDarkModeAsync();
         }
         StateHasChanged();
@@ -123,4 +159,18 @@
         }
         catch { /* best-effort */ }
     }
+
+    /// <summary>True if the user holds the given right (by enum name) in ANY org they belong to.</summary>
+    private bool HasRightInAnyOrg(string rightName) =>
+        _me is not null && _me.OrgRights.Values.Any(rights => rights.Contains(rightName));
+
+    /// <summary>True if the user holds ANY admin-class right in any org. Drives the
+    /// Administration group's overall visibility so signed-in users with zero admin
+    /// access don't even see the group header.</summary>
+    private bool HasAnyAdminRight() =>
+        HasRightInAnyOrg("ManageOrganization")
+        || HasRightInAnyOrg("ManageProjects")
+        || HasRightInAnyOrg("ManageUsers")
+        || HasRightInAnyOrg("ManageRoles")
+        || HasRightInAnyOrg("ManageFields");
 }
