@@ -48,8 +48,11 @@ builder.Services.AddCors(options =>
 // Real path: Entra External ID JWT bearer (config: Auth:Authority / Auth:Audience).
 // Dev path: a backdoor scheme that authenticates as a stand-in user so the app can be
 // driven without a real login. Only available in Development, opt-out via Auth:UseDevBypass=false.
-var useDevBypass = builder.Environment.IsDevelopment()
-    && builder.Configuration.GetValue("Auth:UseDevBypass", true);
+// Default ON in Development, OFF elsewhere — but explicit opt-in via Auth:UseDevBypass=true
+// is honored in any environment. Pragmatic for "prove the prod deploy works" demos before
+// real Entra OIDC is wired up. The warmup log below makes the security posture obvious in
+// the App Service log stream so it doesn't quietly stay on past intent.
+var useDevBypass = builder.Configuration.GetValue("Auth:UseDevBypass", builder.Environment.IsDevelopment());
 
 var defaultScheme = useDevBypass ? DevAuthHandler.SchemeName : JwtBearerDefaults.AuthenticationScheme;
 var authBuilder = builder.Services.AddAuthentication(options =>
@@ -109,6 +112,14 @@ if (app.Environment.IsDevelopment())
         app.Logger.LogWarning("DEV AUTH BYPASS ENABLED — all requests authenticate as a stand-in user.");
     }
 }
+else if (useDevBypass)
+{
+    // Outside Development: shout, because this is now a security-relevant override.
+    app.Logger.LogWarning(
+        "DEV AUTH BYPASS ENABLED IN A {Env} ENVIRONMENT — every request is the stand-in user. " +
+        "Disable Auth:UseDevBypass before real production use.",
+        app.Environment.EnvironmentName);
+}
 
 // In Development the Blazor WASM client calls the API cross-origin over http
 // (http://localhost:5130). HTTPS redirection would answer those with a 307 to the
@@ -122,13 +133,11 @@ if (!app.Environment.IsDevelopment())
 // Hosted Blazor: serve the WASM client's static files from the same App Service.
 // Order matters — these must run BEFORE auth and the MapFallback below must run AFTER
 // the API endpoints so /api/* still routes to the minimal endpoints rather than the SPA.
-// Gated on !Development because in dev the Web project is hosted separately on :5008
-// with hot reload; we don't want the API to also serve a (stale, copy-built) wwwroot.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseBlazorFrameworkFiles();
-    app.UseStaticFiles();
-}
+// NOT gated on environment: the project ref + WebAssembly.Server copy the Web project's
+// wwwroot into our publish output, so it's safe to serve in any env. In real dev the
+// user still goes to :5008 for hot reload; :5130 just happens to also serve a copy.
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
 
 app.UseCors(WebCorsPolicy);
 app.UseAuthentication();
@@ -164,11 +173,7 @@ app.MapProjectEndpoints();
 
 // SPA fallback: any non-API path with no matching static file falls through to index.html
 // so client-side routing (Blazor) handles it. /api/* won't reach here because the minimal
-// API endpoints above match first. Dev-only check matches the static-file middleware above
-// so the dev API stays a pure API.
-if (!app.Environment.IsDevelopment())
-{
-    app.MapFallbackToFile("index.html");
-}
+// API endpoints above match first.
+app.MapFallbackToFile("index.html");
 
 app.Run();
