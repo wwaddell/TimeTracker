@@ -40,6 +40,11 @@
          fingerprinted and unfingerprinted routes, so the plain name below works and
          MapStaticAssets routes the request to the physical fingerprinted file. -->
     <script src="_framework/blazor.webassembly.js"></script>
+    <!-- MSAL bridge: the Microsoft.Authentication.WebAssembly.Msal NuGet ships this JS
+         file via static web assets. Without it, RemoteAuthenticationService's first call
+         throws `Could not find 'AuthenticationService.init' ('AuthenticationService' was
+         undefined)` — the .NET side has no global to interop into. -->
+    <script src="_content/Microsoft.Authentication.WebAssembly.Msal/AuthenticationService.js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script>
         // Hidden context auto-captured on every time entry. Timezone is always sent (IANA name,
