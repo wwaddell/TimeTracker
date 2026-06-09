@@ -11,7 +11,9 @@
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <link href="TimeTracker.Web.styles.css" rel="stylesheet" />
+    <!-- TimeTracker.Web.styles.css is the scoped-CSS bundle Blazor auto-generates from
+         *.razor.css files. The project has no scoped CSS today, so the bundle is never
+         emitted and the reference 404s in prod. Re-add this <link> when scoped CSS lands. -->
     <script type="importmap"></script>
 </head>
 

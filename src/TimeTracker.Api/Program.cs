@@ -131,13 +131,13 @@ if (!app.Environment.IsDevelopment())
 }
 
 // Hosted Blazor: serve the WASM client's static files from the same App Service.
-// Order matters — these must run BEFORE auth and the MapFallback below must run AFTER
-// the API endpoints so /api/* still routes to the minimal endpoints rather than the SPA.
-// NOT gated on environment: the project ref + WebAssembly.Server copy the Web project's
-// wwwroot into our publish output, so it's safe to serve in any env. In real dev the
-// user still goes to :5008 for hot reload; :5130 just happens to also serve a copy.
+// UseBlazorFrameworkFiles sets Blazor's base path + MIME types for /_framework/*.
+// MapStaticAssets (.NET 9+) is the endpoint-routed static file server that ALSO resolves
+// the `#[.{fingerprint}]` placeholders in index.html against the publish-time manifest
+// at TimeTracker.Api.staticwebassets.endpoints.json. Without it, the literal `#` in
+// index.html acts as a URL fragment and the browser 404s on the unresolved asset.
+// Note: MapStaticAssets is registered later among the endpoint mappings, not here.
 app.UseBlazorFrameworkFiles();
-app.UseStaticFiles();
 
 app.UseCors(WebCorsPolicy);
 app.UseAuthentication();
@@ -171,9 +171,14 @@ app.MapGlobalAdminEndpoints();
 app.MapMeEndpoints();
 app.MapProjectEndpoints();
 
-// SPA fallback: any non-API path with no matching static file falls through to index.html
-// so client-side routing (Blazor) handles it. /api/* won't reach here because the minimal
-// API endpoints above match first.
+// Endpoint-routed static file serving with fingerprint resolution. See the comment up by
+// UseBlazorFrameworkFiles for why this is required for .NET 10's #[.{fingerprint}] syntax
+// in index.html. Must come after the API endpoint mappings so /api/* still wins.
+app.MapStaticAssets();
+
+// SPA fallback: any non-API, non-static path falls through to index.html so client-side
+// routing (Blazor) handles it. /api/* won't reach here because the minimal API endpoints
+// above match first.
 app.MapFallbackToFile("index.html");
 
 app.Run();
