@@ -15,13 +15,26 @@
                       MaxLength="200" Counter="200"
                       Variant="Variant.Outlined" Class="mb-3" />
 
+        @* ToStringFunc maps the int role ids to names so the collapsed select reads
+           "Administrator, Consultant" instead of "3, 5". *@
         <MudSelect T="int" Label="Roles" MultiSelection="true" @bind-SelectedValues="selectedRoleIds"
-                   Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter" Class="mb-3">
+                   ToStringFunc="@RoleName"
+                   MultiSelectionTextFunc="@(names => string.Join(", ", names))"
+                   Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
             @foreach (var role in Roles)
             {
                 <MudSelectItem T="int" Value="@role.Id">@role.Name</MudSelectItem>
             }
         </MudSelect>
+        @* Selected roles as removable chips — visible at a glance without opening the
+           dropdown; the X removes a role directly. *@
+        <div class="d-flex flex-wrap mb-3 mt-1" style="gap:.25rem; min-height:1.75rem">
+            @foreach (var id in selectedRoleIds)
+            {
+                <MudChip T="int" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
+                         OnClose="@(() => RemoveRole(id))">@RoleName(id)</MudChip>
+            }
+        </div>
 
         <MudSwitch T="bool" @bind-Value="sendInvite" Color="Color.Primary"
                    Label="@(Existing is null ? "Send invitation email" : "Send invitation email after save")" />
@@ -152,4 +165,8 @@
     }
 
     private void Cancel() => MudDialog.Cancel();
+
+    private string RoleName(int id) => Roles.FirstOrDefault(r => r.Id == id)?.Name ?? id.ToString();
+
+    private void RemoveRole(int id) => selectedRoleIds = selectedRoleIds.Where(x => x != id).ToHashSet();
 }

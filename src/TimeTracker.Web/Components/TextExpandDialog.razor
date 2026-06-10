@@ -1,0 +1,31 @@
+@*  Full-size text editor popped out from a small multiline field (e.g. a task
+    description). OK returns the edited text via DialogResult; Cancel discards. *@
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string" Label="@Label" @bind-Value="text"
+                      Lines="18" AutoGrow="true" MaxLines="28"
+                      MaxLength="@MaxLength" Counter="@MaxLength" Immediate="true"
+                      Variant="Variant.Outlined" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Ok">OK</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string Label { get; set; } = "Text";
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public int MaxLength { get; set; } = 2000;
+
+    private string? text;
+
+    protected override void OnInitialized() => text = Value;
+
+    private void Ok() => MudDialog.Close(DialogResult.Ok(text ?? string.Empty));
+
+    private void Cancel() => MudDialog.Cancel();
+}

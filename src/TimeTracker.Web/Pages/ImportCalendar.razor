@@ -5,6 +5,7 @@
 @using TimeTracker.Contracts.TimeEntries
 @using TimeTracker.Web.Services
 @inject TimeTrackerApi Api
+@inject OrgSelectionState OrgState
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
 
@@ -278,7 +279,8 @@ else
         {
             if (selectedOrgId == 0)
             {
-                selectedOrgId = organizations[0].Id;
+                // Prefer the org the user already picked on another page this session.
+                selectedOrgId = OrgState.Resolve(organizations.Select(o => o.Id), organizations[0].Id);
             }
             projects = await Api.GetVisibleProjectsAsync(selectedOrgId);
             connection = await Api.GetCalendarConnectionAsync(selectedOrgId);
@@ -288,6 +290,7 @@ else
     private async Task OnOrgChanged(int orgId)
     {
         selectedOrgId = orgId;
+        OrgState.OrgId = orgId; // sticky across pages for this session
         rows = null;
         usingSampleData = false;
         await GuardAsync(async () =>

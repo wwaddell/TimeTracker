@@ -9,6 +9,7 @@
 @using TimeTracker.Web.Theme
 @using TimeTracker.Web.Services
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
+@inject TimeTracker.Web.Services.OrgSelectionState OrgState
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
@@ -343,7 +344,8 @@ else
         {
             if (selectedOrgId == 0)
             {
-                selectedOrgId = organizations[0].Id;
+                // Prefer the org the user already picked on another page this session.
+                selectedOrgId = OrgState.Resolve(organizations.Select(o => o.Id), organizations[0].Id);
             }
             await LoadOrgDataAsync();
         }
@@ -352,6 +354,7 @@ else
     private async Task OnOrgChanged(int orgId)
     {
         selectedOrgId = orgId;
+        OrgState.OrgId = orgId; // sticky across pages for this session
         page = 1;
         await GuardAsync(LoadOrgDataAsync);
     }

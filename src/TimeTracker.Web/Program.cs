@@ -65,6 +65,8 @@ else
 }
 
 builder.Services.AddScoped<TimeTrackerApi>();
+// Session-sticky org selection shared by every page's org switcher.
+builder.Services.AddScoped<OrgSelectionState>();
 builder.Services.AddMudServices();
 
 await builder.Build().RunAsync();

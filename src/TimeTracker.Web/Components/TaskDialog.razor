@@ -5,6 +5,7 @@
 @using TimeTracker.Domain.Enums
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <MudDialog>
     <DialogContent>
@@ -19,7 +20,17 @@
                       Variant="Variant.Outlined" Class="mb-3" />
         <MudTextField T="string" Label="Description" @bind-Value="description" Lines="2"
                       MaxLength="2000" Counter="2000"
-                      AutoGrow="true" MaxLines="10" Variant="Variant.Outlined" Class="mb-3" />
+                      AutoGrow="true" MaxLines="10" Variant="Variant.Outlined" />
+        @* Pop-out editor for long descriptions: the inline field caps at 10 visible lines,
+           so once text grows past that, editing in place gets cramped. Minimal link per
+           design — bottom-left under the field. *@
+        <div class="d-flex mb-3">
+            <MudLink Typo="Typo.caption" OnClick="ExpandDescriptionAsync" Style="cursor:pointer">
+                <MudIcon Icon="@Icons.Material.Filled.OpenInFull" Size="Size.Small"
+                         Style="font-size:0.9rem; vertical-align:text-bottom" />
+                Open in larger editor
+            </MudLink>
+        </div>
         @if (Projects is { Count: > 0 })
         {
             <MudSelect T="int?" Label="Project" @bind-Value="projectId" Clearable="true"
@@ -172,6 +183,24 @@
         {
             // New task → default to the current user (who must be in the members list).
             assignedToUserId = CurrentUserId;
+        }
+    }
+
+    // Pop the description into a full-size editor dialog; OK copies the text back.
+    private async Task ExpandDescriptionAsync()
+    {
+        var parameters = new DialogParameters<TextExpandDialog>
+        {
+            { x => x.Label, "Description" },
+            { x => x.Value, description },
+            { x => x.MaxLength, 2000 },
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<TextExpandDialog>("Edit description", parameters, options);
+        if (await dialog.Result is { Canceled: false, Data: string edited })
+        {
+            description = edited;
+            StateHasChanged();
         }
     }
 
