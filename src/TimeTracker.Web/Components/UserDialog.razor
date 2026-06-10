@@ -2,6 +2,7 @@
 @using TimeTracker.Contracts.Members
 @inject TimeTracker.Web.Services.TimeTrackerApi Api
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <MudDialog>
     <DialogContent>
@@ -15,25 +16,23 @@
                       MaxLength="200" Counter="200"
                       Variant="Variant.Outlined" Class="mb-3" />
 
-        @* ToStringFunc maps the int role ids to names so the collapsed select reads
-           "Administrator, Consultant" instead of "3, 5". *@
-        <MudSelect T="int" Label="Roles" MultiSelection="true" @bind-SelectedValues="selectedRoleIds"
-                   ToStringFunc="@RoleName"
-                   MultiSelectionTextFunc="@(names => string.Join(", ", names))"
-                   Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
-            @foreach (var role in Roles)
-            {
-                <MudSelectItem T="int" Value="@role.Id">@role.Name</MudSelectItem>
-            }
-        </MudSelect>
-        @* Selected roles as removable chips — visible at a glance without opening the
-           dropdown; the X removes a role directly. *@
-        <div class="d-flex flex-wrap mb-3 mt-1" style="gap:.25rem; min-height:1.75rem">
+        @* Roles as removable chips + an Add button that opens a picker of the roles the
+           user doesn't hold yet. No dropdown — membership is visible at a glance and the
+           X on each chip removes it directly. *@
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Roles</MudText>
+        <div class="d-flex flex-wrap align-center mb-3 mt-1" style="gap:.25rem; min-height:2rem">
             @foreach (var id in selectedRoleIds)
             {
                 <MudChip T="int" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
                          OnClose="@(() => RemoveRole(id))">@RoleName(id)</MudChip>
             }
+            @if (selectedRoleIds.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary me-2"><em>No roles</em></MudText>
+            }
+            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add" OnClick="AddRoleAsync"
+                       Disabled="@(AvailableRoles.Count == 0)">Add</MudButton>
         </div>
 
         <MudSwitch T="bool" @bind-Value="sendInvite" Color="Color.Primary"
@@ -169,4 +168,18 @@
     private string RoleName(int id) => Roles.FirstOrDefault(r => r.Id == id)?.Name ?? id.ToString();
 
     private void RemoveRole(int id) => selectedRoleIds = selectedRoleIds.Where(x => x != id).ToHashSet();
+
+    private IReadOnlyList<OrganizationRoleDto> AvailableRoles =>
+        Roles.Where(r => !selectedRoleIds.Contains(r.Id)).ToList();
+
+    private async Task AddRoleAsync()
+    {
+        var parameters = new DialogParameters<RolePickerDialog> { { x => x.Available, AvailableRoles } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<RolePickerDialog>("Add role", parameters, options);
+        if (await dialog.Result is { Canceled: false, Data: OrganizationRoleDto role })
+        {
+            selectedRoleIds = selectedRoleIds.Append(role.Id).ToHashSet();
+        }
+    }
 }

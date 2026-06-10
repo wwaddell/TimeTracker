@@ -1,0 +1,38 @@
+@using TimeTracker.Contracts.Admin
+
+@*  Picker for adding one role to a user — shows only roles the user doesn't already
+    hold. Click a role to add it; the dialog closes returning the picked role. *@
+<MudDialog>
+    <DialogContent>
+        @if (Available.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">This user already has every role.</MudText>
+        }
+        else
+        {
+            <MudList T="OrganizationRoleDto" Dense="true">
+                @foreach (var role in Available)
+                {
+                    <MudListItem T="OrganizationRoleDto" Icon="@Icons.Material.Filled.Badge"
+                                 OnClick="@(() => Pick(role))">
+                        @role.Name
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Roles not yet assigned to the user.</summary>
+    [Parameter] public IReadOnlyList<OrganizationRoleDto> Available { get; set; } = [];
+
+    private void Pick(OrganizationRoleDto role) => MudDialog.Close(DialogResult.Ok(role));
+
+    private void Cancel() => MudDialog.Cancel();
+}
