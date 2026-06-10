@@ -185,6 +185,129 @@ public static class GlobalAdminEndpoints
             await db.SaveChangesAsync();
             return Results.NoContent();
         });
+
+        // List every user in the system. Lets global admins edit profile fields for
+        // accounts that don't belong to any org (where the per-org Users page can't
+        // reach them) — e.g. someone who signed up via Entra without a display name.
+        api.MapGet("/users", async (TimeTrackerDbContext db, ICurrentUser currentUser) =>
+        {
+            if (!await currentUser.IsGlobalAdminAsync())
+            {
+                return Results.Forbid();
+            }
+
+            var users = await db.Users.AsNoTracking()
+                .OrderBy(u => u.DisplayName).ThenBy(u => u.Email)
+                .Select(u => new AdminUserDto(
+                    u.Id,
+                    u.DisplayName,
+                    u.Email,
+                    u.ExternalId == null,
+                    u.IsGlobalAdmin,
+                    u.Organizations.Count))
+                .ToListAsync();
+
+            return Results.Ok(users);
+        });
+
+        // Edit a user as a global admin: display name, email, and the platform-admin flag.
+        // Email collisions across the t_user table are rejected (the Email column is the
+        // global identity, not org-scoped). A global admin cannot revoke their own admin
+        // flag here — that would lock them out — they have to grant another global admin
+        // and have that other admin revoke them. Catches the common "I demoted myself"
+        // foot-gun.
+        api.MapPut("/users/{userId:int}", async (
+            int userId, UpdateAdminUserRequest req, TimeTrackerDbContext db, ICurrentUser currentUser) =>
+        {
+            if (!await currentUser.IsGlobalAdminAsync())
+            {
+                return Results.Forbid();
+            }
+
+            var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user is null)
+            {
+                return Results.NotFound();
+            }
+
+            var displayName = req.DisplayName?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(displayName))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["displayName"] = ["Display name is required."],
+                });
+            }
+            if (displayName.Length > DisplayNameMaxLength)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["displayName"] = [$"Display name must be {DisplayNameMaxLength} characters or fewer."],
+                });
+            }
+
+            var email = req.Email?.Trim() ?? string.Empty;
+            if (ValidateEmail(email) is { } emailErr) return emailErr;
+
+            if (!string.Equals(email, user.Email, StringComparison.OrdinalIgnoreCase))
+            {
+                var collision = await db.Users.AnyAsync(u => u.Id != userId && u.Email == email);
+                if (collision)
+                {
+                    return Results.ValidationProblem(new Dictionary<string, string[]>
+                    {
+                        ["email"] = ["Another user already has this email address."],
+                    });
+                }
+            }
+
+            // Self-demotion guard. The caller can flip the flag on any OTHER user, but not
+            // strip themselves of global-admin. Without this, a single-global-admin setup
+            // becomes unrecoverable from the UI (would need direct SQL).
+            var callerId = await currentUser.GetUserIdAsync();
+            if (callerId == userId && user.IsGlobalAdmin && !req.IsGlobalAdmin)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["isGlobalAdmin"] = ["Have another global admin revoke this — you can't demote yourself."],
+                });
+            }
+
+            user.DisplayName = displayName;
+            user.Email = email;
+            user.IsGlobalAdmin = req.IsGlobalAdmin;
+            user.ModifiedUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new { user.Id });
+        });
+    }
+
+    // Length caps mirror MemberEndpoints. Centralizing them later would be nice; for now,
+    // duplicate the constants alongside their validation here so both endpoint groups
+    // remain self-contained.
+    private const int DisplayNameMaxLength = 200;
+    private const int EmailMaxLength = 320;
+
+    // Same shape as MemberEndpoints.ValidateEmail — duplicated rather than reaching across
+    // file boundaries for a small private helper.
+    private static IResult? ValidateEmail(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["email"] = ["A valid email address is required."],
+            });
+        }
+        if (email.Length > EmailMaxLength)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["email"] = [$"Email must be {EmailMaxLength} characters or fewer."],
+            });
+        }
+        return null;
     }
 
     // Find (or create) an "Administrator" role granting all rights for the org.

@@ -57,6 +57,7 @@
                     @if (_me.IsGlobalAdmin)
                     {
                         <MudNavLink Href="admin/organizations" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Public">Global Admin</MudNavLink>
+                        <MudNavLink Href="admin/users-global" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.SupervisorAccount">Global Users</MudNavLink>
                     }
                     @if (HasRightInAnyOrg("ManageOrganization"))
                     {

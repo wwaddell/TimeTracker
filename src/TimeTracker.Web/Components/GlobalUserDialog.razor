@@ -1,0 +1,109 @@
+@using TimeTracker.Contracts.Admin
+@inject TimeTracker.Web.Services.TimeTrackerApi Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (Existing.IsPending)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                This user was invited but hasn't signed in yet. Their account links to the
+                identity provider on first login.
+            </MudAlert>
+        }
+        <MudTextField T="string" Label="Display name" @bind-Value="displayName" Required="true"
+                      MaxLength="200" Counter="200" Immediate="true"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField T="string" Label="Email" @bind-Value="email" Required="true"
+                      MaxLength="320" InputType="InputType.Email"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        <MudSwitch T="bool" @bind-Value="isGlobalAdmin" Color="Color.Primary"
+                   Disabled="@isSelf"
+                   Label="Global administrator" />
+        @if (isSelf)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1" Style="margin-left:3rem">
+                You can't revoke your own global-admin flag — have another global admin do it.
+            </MudText>
+        }
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="saving">
+            @(saving ? "Saving…" : "Save")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The user being edited.</summary>
+    [Parameter, EditorRequired] public AdminUserDto Existing { get; set; } = default!;
+
+    /// <summary>The signed-in user's id; used to disable the IsGlobalAdmin switch when
+    /// the row is the caller's own row (server-side check rejects self-demotion regardless).</summary>
+    [Parameter] public int CurrentUserId { get; set; }
+
+    private string displayName = string.Empty;
+    private string email = string.Empty;
+    private bool isGlobalAdmin;
+    private bool saving;
+    private string? error;
+
+    private bool isSelf => Existing.Id == CurrentUserId;
+
+    protected override void OnInitialized()
+    {
+        displayName = Existing.DisplayName;
+        email = Existing.Email;
+        isGlobalAdmin = Existing.IsGlobalAdmin;
+    }
+
+    private async Task SaveAsync()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            error = "Display name is required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+        {
+            error = "A valid email address is required.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var result = await Api.UpdateAdminUserAsync(Existing.Id, new UpdateAdminUserRequest
+            {
+                DisplayName = displayName.Trim(),
+                Email = email.Trim(),
+                // Server clamps this to the existing value when isSelf, but we also avoid
+                // sending the change from the client when the switch was disabled.
+                IsGlobalAdmin = isSelf ? Existing.IsGlobalAdmin : isGlobalAdmin,
+            });
+            if (result.Success)
+            {
+                Snackbar.Add("User updated", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                error = result.Error;
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

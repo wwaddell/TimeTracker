@@ -1,0 +1,169 @@
+@page "/admin/users-global"
+@using TimeTracker.Contracts.Admin
+@using TimeTracker.Contracts.Me
+@using TimeTracker.Web.Components
+@using TimeTracker.Web.Services
+@inject TimeTrackerApi Api
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Global Users</PageTitle>
+
+@if (loadError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <div class="d-flex align-center justify-space-between" style="gap:1rem">
+            <span>@loadError</span>
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Retry</MudButton>
+        </div>
+    </MudAlert>
+}
+
+<div class="d-flex justify-space-between align-center mb-1">
+    <MudText Typo="Typo.h5">Global Users</MudText>
+    <MudTextField T="string" @bind-Value="search" @bind-Value:after="Filter"
+                  Placeholder="Search by name or email" Variant="Variant.Outlined"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                  Margin="Margin.Dense" Style="max-width:24rem; width:100%" />
+</div>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Every account in the system. Use this to fix display names for users who signed up
+    without one, change someone's email, or grant/revoke the global administrator flag.
+</MudText>
+
+@if (users is null)
+{
+    @if (loadError is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+}
+else if (filtered.Count == 0)
+{
+    <MudText Class="mud-text-secondary">
+        @(string.IsNullOrWhiteSpace(search) ? "No users yet." : "No users match that search.")
+    </MudText>
+}
+else
+{
+    <MudTable Items="filtered" Hover="true" Dense="true" Elevation="1">
+        <HeaderContent>
+            <MudTh>Display name</MudTh>
+            <MudTh>Email</MudTh>
+            <MudTh Style="width:1px; white-space:nowrap">Orgs</MudTh>
+            <MudTh Style="width:1px; white-space:nowrap">Status</MudTh>
+            <MudTh Style="width:1px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>
+                @if (string.IsNullOrWhiteSpace(context.DisplayName))
+                {
+                    <MudText Color="Color.Warning" Typo="Typo.body2">
+                        <em>(no name)</em>
+                    </MudText>
+                }
+                else
+                {
+                    <b>@context.DisplayName</b>
+                }
+            </MudTd>
+            <MudTd>
+                @if (string.IsNullOrWhiteSpace(context.Email))
+                {
+                    <MudText Class="mud-text-secondary" Typo="Typo.body2"><em>(none)</em></MudText>
+                }
+                else
+                {
+                    @context.Email
+                }
+            </MudTd>
+            <MudTd Style="text-align:center">@context.OrgCount</MudTd>
+            <MudTd Style="white-space:nowrap">
+                @if (context.IsGlobalAdmin)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary"
+                             Icon="@Icons.Material.Filled.Shield">Global admin</MudChip>
+                }
+                @if (context.IsPending)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning"
+                             Icon="@Icons.Material.Filled.HourglassEmpty">Pending</MudChip>
+                }
+            </MudTd>
+            <MudTd Style="text-align:right; white-space:nowrap">
+                <MudTooltip Text="Edit">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                   OnClick="@(() => OpenEditDialogAsync(context))" />
+                </MudTooltip>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    // Cascaded from MainLayout — used to flag the caller's own row so the
+    // IsGlobalAdmin switch can be disabled (server-side check rejects self-demotion
+    // regardless; this is just to surface the constraint clearly in the dialog).
+    [CascadingParameter(Name = "Me")] private MeDto? Me { get; set; }
+
+    private IReadOnlyList<AdminUserDto>? users;
+    private IReadOnlyList<AdminUserDto> filtered = [];
+    private string search = string.Empty;
+    private string? loadError;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            loadError = null;
+            users = await Api.GetAllUsersAsync();
+            Filter();
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex.Message;
+        }
+        catch (Exception)
+        {
+            loadError = "Something went wrong loading users. Please retry.";
+        }
+    }
+
+    // Simple client-side filter — the list is bounded by users-per-platform, which for
+    // this app is tiny. Switch to a server-side ?q= if it ever crosses ~1000 rows.
+    private void Filter()
+    {
+        if (users is null)
+        {
+            filtered = [];
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            filtered = users;
+            return;
+        }
+        var q = search.Trim();
+        filtered = users.Where(u =>
+            (!string.IsNullOrEmpty(u.DisplayName) && u.DisplayName.Contains(q, StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrEmpty(u.Email) && u.Email.Contains(q, StringComparison.OrdinalIgnoreCase))).ToList();
+    }
+
+    private async Task OpenEditDialogAsync(AdminUserDto user)
+    {
+        var parameters = new DialogParameters<GlobalUserDialog>
+        {
+            { x => x.Existing, user },
+            { x => x.CurrentUserId, Me?.Id ?? 0 },
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<GlobalUserDialog>("Edit user", parameters, options);
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+}

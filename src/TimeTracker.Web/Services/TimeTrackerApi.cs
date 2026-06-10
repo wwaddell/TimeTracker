@@ -204,6 +204,14 @@ public class TimeTrackerApi(HttpClient http)
     public async Task<ApiResult> RemoveOrgAdminAsync(int orgId, int userId) =>
         await SendAsync(() => http.DeleteAsync($"/api/admin/organizations/{orgId}/admins/{userId}"));
 
+    // --- Global admin: system-wide users ---
+
+    public async Task<IReadOnlyList<AdminUserDto>> GetAllUsersAsync() =>
+        await GetAsync<List<AdminUserDto>>("/api/admin/users") ?? [];
+
+    public async Task<ApiResult> UpdateAdminUserAsync(int userId, UpdateAdminUserRequest request) =>
+        await SendAsync(() => http.PutAsJsonAsync($"/api/admin/users/{userId}", request));
+
     // --- Calendar import (Outlook via Graph) ---
 
     public async Task<CalendarPreviewResult> PreviewCalendarAsync(int orgId, CalendarPreviewRequest request) =>

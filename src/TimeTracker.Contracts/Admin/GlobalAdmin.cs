@@ -27,3 +27,25 @@ public record AssignOrgAdminRequest
     public string Email { get; init; } = string.Empty;
     public string? DisplayName { get; init; }
 }
+
+/// <summary>
+/// A user as seen by a global (platform) admin — system-wide, not scoped to a particular
+/// organization. <see cref="IsPending"/> means the user was invited by email but hasn't
+/// signed in yet (no external_id). <see cref="OrgCount"/> shows how many orgs the user
+/// belongs to so admins can spot rogue / orphan accounts.
+/// </summary>
+public record AdminUserDto(
+    int Id,
+    string DisplayName,
+    string Email,
+    bool IsPending,
+    bool IsGlobalAdmin,
+    int OrgCount);
+
+/// <summary>Edit a user's profile + platform-level flags as a global admin.</summary>
+public record UpdateAdminUserRequest
+{
+    public string DisplayName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public bool IsGlobalAdmin { get; init; }
+}
