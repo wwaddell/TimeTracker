@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="TimeTracker">
+  <!-- Solid brand-blue disc so the icon reads as a single shape against any browser
+       tab / OS dock background regardless of light or dark mode. -->
+  <circle cx="32" cy="32" r="30" fill="#2563EB"/>
+  <!-- Clock face: thin white ring + 4 dot markers at 12/3/6/9 to read as a clock face
+       even at tiny sizes. -->
+  <circle cx="32" cy="32" r="22" fill="none" stroke="#ffffff" stroke-width="2.5"/>
+  <circle cx="32" cy="13" r="1.8" fill="#ffffff"/>
+  <circle cx="51" cy="32" r="1.8" fill="#ffffff"/>
+  <circle cx="32" cy="51" r="1.8" fill="#ffffff"/>
+  <circle cx="13" cy="32" r="1.8" fill="#ffffff"/>
+  <!-- Checkmark as the clock "hands" — combines the time + task semantics into one
+       symbol. Stroked with round caps + joins to stay crisp at every render size. -->
+  <path d="M21 34 L29 42 L45 24"
+        fill="none" stroke="#ffffff" stroke-width="4.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

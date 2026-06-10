@@ -67,39 +67,88 @@ a, .btn-link {
         content: "An error has occurred."
     }
 
-.loading-progress {
-    position: absolute;
-    display: block;
-    width: 8rem;
-    height: 8rem;
-    inset: 20vh 0 auto 0;
-    margin: 0 auto 0 auto;
+/* Branded boot splash. Replaces the default Blazor circular spinner with a stacked
+   logo + wordmark + linear progress bar that matches the app theme. Shown while
+   blazor.webassembly.js downloads the runtime + bundles. The Blazor host writes
+   --blazor-load-percentage and --blazor-load-percentage-text as CSS vars on :root,
+   which tt-splash-fill and tt-splash-status read. */
+.tt-splash {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    background: #ffffff;
+    /* Use the system font during boot — Roboto may still be downloading. */
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    color: #1F2933;
 }
 
-    .loading-progress circle {
-        fill: none;
-        stroke: #e0e0e0;
-        stroke-width: 0.6rem;
-        transform-origin: 50% 50%;
-        transform: rotate(-90deg);
-    }
-
-        .loading-progress circle:last-child {
-            stroke: #1b6ec2;
-            stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
-            transition: stroke-dasharray 0.05s ease-in-out;
-        }
-
-.loading-progress-text {
-    position: absolute;
-    text-align: center;
-    font-weight: bold;
-    inset: calc(20vh + 3.25rem) 0 auto 0.2rem;
+.tt-splash-logo {
+    width: 6.5rem;
+    height: 6.5rem;
+    filter: drop-shadow(0 6px 18px rgba(37, 99, 235, 0.25));
+    /* Gentle breathing animation so the page doesn't look frozen during a slow boot. */
+    animation: tt-splash-pulse 2.4s ease-in-out infinite;
 }
 
-    .loading-progress-text:after {
-        content: var(--blazor-load-percentage-text, "Loading");
+@keyframes tt-splash-pulse {
+    0%, 100% { transform: scale(1);    opacity: 1;    }
+    50%      { transform: scale(1.04); opacity: 0.92; }
+}
+
+.tt-splash-title {
+    font-size: 1.6rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.tt-splash-bar {
+    width: min(16rem, 60vw);
+    height: 6px;
+    background: rgba(37, 99, 235, 0.12);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.tt-splash-fill {
+    height: 100%;
+    width: var(--blazor-load-percentage, 0%);
+    background: #2563EB;
+    border-radius: 999px;
+    transition: width 0.1s linear;
+}
+
+.tt-splash-status {
+    font-size: 0.85rem;
+    color: #6b7280;
+    min-height: 1.2em;
+}
+
+.tt-splash-status:after {
+    content: var(--blazor-load-percentage-text, "Loading…");
+}
+
+/* Honor the OS dark-mode preference during boot. The app's persisted DarkMode
+   preference isn't available until after /api/me resolves, which is after the
+   splash hides — so OS-level prefers-color-scheme is the only signal we have. */
+@media (prefers-color-scheme: dark) {
+    .tt-splash {
+        background: #1f2933;
+        color: #f3f4f6;
     }
+    .tt-splash-bar {
+        background: rgba(91, 141, 239, 0.25);
+    }
+    .tt-splash-fill {
+        background: #5B8DEF;
+    }
+    .tt-splash-status {
+        color: #9ca3af;
+    }
+}
 
 code {
     color: #c02d76;
