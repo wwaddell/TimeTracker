@@ -140,6 +140,14 @@ public static class TimeEntryEndpoints
                 return Results.Ok(new TimeEntriesPage(withKeys, p, size, hasMore, []));
             }
 
+            // No entries on this page → nothing to group. Without this guard, ranges.Min()
+            // below throws on the empty sequence (500 when grouping is on and the user has
+            // no entries yet).
+            if (withKeys.Count == 0)
+            {
+                return Results.Ok(new TimeEntriesPage(withKeys, p, size, hasMore, []));
+            }
+
             // Compute the date ranges covered by the visible groups, then load ALL entries
             // in those ranges so totals reflect the full group (not just the page slice).
             var groupKeys = withKeys.Select(e => e.GroupKey).Distinct().ToList();
