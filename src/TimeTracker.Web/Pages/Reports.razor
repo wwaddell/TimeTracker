@@ -1,0 +1,339 @@
+@page "/reports"
+@using System.Text.Json
+@using TimeTracker.Contracts.Members
+@using TimeTracker.Contracts.Projects
+@using TimeTracker.Contracts.TimeEntries
+@using TimeTracker.Web.Components
+@using TimeTracker.Web.Services
+@inject TimeTrackerApi Api
+@inject OrgSelectionState OrgState
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>Reports</PageTitle>
+
+@if (loadError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <div class="d-flex align-center justify-space-between" style="gap:1rem">
+            <span>@loadError</span>
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Retry</MudButton>
+        </div>
+    </MudAlert>
+}
+
+<div class="d-flex justify-space-between align-center mb-1 flex-wrap" style="gap:1rem">
+    <MudText Typo="Typo.h5">Reports</MudText>
+    @if (organizations is { Count: > 1 })
+    {
+        <MudSelect T="int" Label="Organization" Value="selectedOrgId" ValueChanged="OnOrgChanged"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:18rem; width:100%">
+            @foreach (var org in organizations)
+            {
+                <MudSelectItem T="int" Value="@org.Id">@org.Name</MudSelectItem>
+            }
+        </MudSelect>
+    }
+</div>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Run a report, review the results, and export as JSON or CSV.
+</MudText>
+
+@if (organizations is null)
+{
+    @if (loadError is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+}
+else
+{
+    <MudExpansionPanels MultiExpansion="false" Elevation="1">
+        @foreach (var report in _catalog)
+        {
+            <MudExpansionPanel>
+                <TitleContent>
+                    <div>
+                        <MudText Typo="Typo.subtitle1"><b>@report.Name</b></MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@report.Description</MudText>
+                    </div>
+                </TitleContent>
+                <ChildContent>
+                    @* Parameter row — only the controls this report uses. *@
+                    <div class="d-flex flex-wrap align-center mb-2" style="gap:.75rem">
+                        @if (report.HasDateRange)
+                        {
+                            <MudDatePicker Label="From" @bind-Date="fromProxy" Variant="Variant.Outlined"
+                                           Margin="Margin.Dense" Style="width:11rem" />
+                            <MudDatePicker Label="To" @bind-Date="toProxy" Variant="Variant.Outlined"
+                                           Margin="Margin.Dense" Style="width:11rem" />
+                        }
+                        @if (report.HasBucket)
+                        {
+                            <MudSelect T="string" Label="Group by" @bind-Value="bucket" Variant="Variant.Outlined"
+                                       Margin="Margin.Dense" Style="width:9rem">
+                                <MudSelectItem T="string" Value="@("day")">Day</MudSelectItem>
+                                <MudSelectItem T="string" Value="@("week")">Week</MudSelectItem>
+                                <MudSelectItem T="string" Value="@("month")">Month</MudSelectItem>
+                            </MudSelect>
+                        }
+                        @if (report.HasProject && projects is { Count: > 0 })
+                        {
+                            <MudSelect T="int?" Label="Project" @bind-Value="projectId" Clearable="true"
+                                       Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:13rem"
+                                       Placeholder="All projects">
+                                @foreach (var p in projects)
+                                {
+                                    <MudSelectItem T="int?" Value="@((int?)p.Id)">@p.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                        @if (report.HasPerson && members is { Count: > 0 })
+                        {
+                            <MudSelect T="int?" Label="Person" @bind-Value="personId" Clearable="true"
+                                       Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:13rem"
+                                       Placeholder="Everyone">
+                                @foreach (var m in members)
+                                {
+                                    <MudSelectItem T="int?" Value="@((int?)m.UserId)">@m.DisplayName</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                        @if (report.HasOverdueToggle)
+                        {
+                            <MudSwitch T="bool" @bind-Value="overdueOnly" Color="Color.Warning" Label="Overdue only" />
+                        }
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.PlayArrow"
+                                   OnClick="@(() => RunAsync(report))" Disabled="@running">
+                            Run
+                        </MudButton>
+                        @if (Results(report.Key) is { Count: > 0 })
+                        {
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Download"
+                                       OnClick="@(() => ExportJsonAsync(report))">JSON</MudButton>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Download"
+                                       OnClick="@(() => ExportCsvAsync(report))">CSV</MudButton>
+                        }
+                    </div>
+
+                    @if (running && runningKey == report.Key)
+                    {
+                        <MudProgressLinear Indeterminate="true" />
+                    }
+                    else if (ranKeys.Contains(report.Key))
+                    {
+                        <ReportTable Rows="Results(report.Key)" />
+                    }
+                </ChildContent>
+            </MudExpansionPanel>
+        }
+    </MudExpansionPanels>
+}
+
+@code {
+    private sealed record ReportDef(
+        string Key,
+        string Name,
+        string Description,
+        bool HasDateRange = true,
+        bool HasProject = false,
+        bool HasPerson = false,
+        bool HasBucket = false,
+        bool HasOverdueToggle = false);
+
+    private readonly List<ReportDef> _catalog =
+    [
+        new("time-detail", "Time detail",
+            "Every time entry in the range — date, person, project, task, note, and minutes.",
+            HasProject: true, HasPerson: true),
+        new("time-by-project", "Time by project",
+            "Total hours and entry counts per project."),
+        new("time-by-person", "Time by person",
+            "Total hours and entry counts per member."),
+        new("time-by-period", "Time by period",
+            "Totals bucketed by day, week, or month — a simple trend view.",
+            HasBucket: true),
+        new("tasks-completed", "Tasks completed",
+            "Tasks closed in the range, with estimated vs actual hours.",
+            HasPerson: true),
+        new("open-tasks", "Open tasks snapshot",
+            "Currently open tasks with age, priority, due date and progress.",
+            HasDateRange: false, HasProject: true, HasPerson: true, HasOverdueToggle: true),
+        new("incomplete-entries", "Incomplete entries",
+            "Entries missing required fields — a cleanup chase list."),
+    ];
+
+    private IReadOnlyList<OrganizationDto>? organizations;
+    private IReadOnlyList<ProjectPickerDto>? projects;
+    private IReadOnlyList<MemberDto>? members;
+    private int selectedOrgId;
+    private string? loadError;
+
+    // Shared parameters (each panel shows only what its report uses; values persist as
+    // the user moves between panels, which is usually what they want).
+    private DateOnly from = DateOnly.FromDateTime(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1));
+    private DateOnly to = DateOnly.FromDateTime(DateTime.Today);
+    private int? projectId;
+    private int? personId;
+    private string bucket = "week";
+    private bool overdueOnly;
+
+    private readonly Dictionary<string, IReadOnlyList<object>> results = [];
+    private readonly HashSet<string> ranKeys = [];
+    private bool running;
+    private string? runningKey;
+
+    // MudDatePicker binds DateTime?; the report params are DateOnly.
+    private DateTime? fromProxy
+    {
+        get => from.ToDateTime(TimeOnly.MinValue);
+        set => from = value is { } d ? DateOnly.FromDateTime(d) : from;
+    }
+    private DateTime? toProxy
+    {
+        get => to.ToDateTime(TimeOnly.MinValue);
+        set => to = value is { } d ? DateOnly.FromDateTime(d) : to;
+    }
+
+    private IReadOnlyList<object> Results(string key) => results.GetValueOrDefault(key) ?? [];
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            loadError = null;
+            organizations = await Api.GetOrganizationsAsync();
+            if (organizations.Count > 0)
+            {
+                if (selectedOrgId == 0)
+                {
+                    selectedOrgId = OrgState.Resolve(organizations.Select(o => o.Id), organizations[0].Id);
+                }
+                await LoadOrgRefsAsync();
+            }
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex.Message;
+        }
+        catch (Exception)
+        {
+            loadError = "Something went wrong loading reports. Please retry.";
+        }
+    }
+
+    private async Task LoadOrgRefsAsync()
+    {
+        projects = await Api.GetVisibleProjectsAsync(selectedOrgId);
+        // Members power the person filter; needs ManageUsers which a ViewReports-only
+        // user may lack — degrade by hiding the filter rather than failing the page.
+        try
+        {
+            members = await Api.GetMembersAsync(selectedOrgId);
+        }
+        catch
+        {
+            members = null;
+        }
+    }
+
+    private async Task OnOrgChanged(int orgId)
+    {
+        selectedOrgId = orgId;
+        OrgState.OrgId = orgId; // sticky across pages for this session
+        results.Clear();
+        ranKeys.Clear();
+        projectId = null;
+        personId = null;
+        try
+        {
+            await LoadOrgRefsAsync();
+        }
+        catch (Exception)
+        {
+            loadError = "Something went wrong loading reports. Please retry.";
+        }
+    }
+
+    private async Task RunAsync(ReportDef report)
+    {
+        running = true;
+        runningKey = report.Key;
+        try
+        {
+            IReadOnlyList<object> rows = report.Key switch
+            {
+                "time-detail" => await Api.GetTimeDetailReportAsync(selectedOrgId, from, to, projectId, personId),
+                "time-by-project" => await Api.GetTimeByProjectReportAsync(selectedOrgId, from, to),
+                "time-by-person" => await Api.GetTimeByPersonReportAsync(selectedOrgId, from, to),
+                "time-by-period" => await Api.GetTimeByPeriodReportAsync(selectedOrgId, from, to, bucket),
+                "tasks-completed" => await Api.GetTasksCompletedReportAsync(selectedOrgId, from, to, personId),
+                "open-tasks" => await Api.GetOpenTasksReportAsync(selectedOrgId, personId, projectId, overdueOnly),
+                "incomplete-entries" => await Api.GetIncompleteEntriesReportAsync(selectedOrgId, from, to),
+                _ => [],
+            };
+            results[report.Key] = rows;
+            ranKeys.Add(report.Key);
+        }
+        catch (ApiException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Running the report failed. You may not have the View Reports right in this organization.", Severity.Error);
+        }
+        finally
+        {
+            running = false;
+            runningKey = null;
+        }
+    }
+
+    private string ExportBaseName(ReportDef report) =>
+        report.HasDateRange ? $"{report.Key}_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}" : report.Key;
+
+    private async Task ExportJsonAsync(ReportDef report)
+    {
+        var rows = Results(report.Key);
+        var json = JsonSerializer.Serialize(rows, new JsonSerializerOptions { WriteIndented = true });
+        await JS.InvokeVoidAsync("ttDownload", $"{ExportBaseName(report)}.json", "application/json", json);
+    }
+
+    private async Task ExportCsvAsync(ReportDef report)
+    {
+        var rows = Results(report.Key);
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        var props = rows[0].GetType().GetProperties();
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(string.Join(",", props.Select(p => CsvEscape(p.Name))));
+        foreach (var row in rows)
+        {
+            sb.AppendLine(string.Join(",", props.Select(p => CsvEscape(CsvValue(p.GetValue(row))))));
+        }
+        await JS.InvokeVoidAsync("ttDownload", $"{ExportBaseName(report)}.csv", "text/csv", sb.ToString());
+    }
+
+    private static string CsvValue(object? value) => value switch
+    {
+        null => "",
+        DateOnly d => d.ToString("yyyy-MM-dd"),
+        DateTime dt => dt.ToString("o"),
+        _ => value.ToString() ?? "",
+    };
+
+    private static string CsvEscape(string value) =>
+        value.Contains(',') || value.Contains('"') || value.Contains('\n')
+            ? $"\"{value.Replace("\"", "\"\"")}\""
+            : value;
+}

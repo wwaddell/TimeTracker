@@ -118,6 +118,20 @@
             }
         };
 
+        // Client-side file download (report exports). Builds a Blob from the string
+        // content and clicks a transient <a download> — no server round-trip.
+        window.ttDownload = function (filename, mimeType, content) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
         // Register the PWA service worker. Required by Chrome/Edge to surface the
         // "Install" affordance next to the URL bar. The worker is a near-no-op (see
         // service-worker.js) so adding it doesn't change runtime behavior — it just

@@ -48,6 +48,11 @@
             <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Schedule">Log Time</MudNavLink>
             <MudNavLink Href="tasks" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Checklist">Tasks</MudNavLink>
             <MudNavLink Href="import" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.CalendarMonth">Import from Outlook</MudNavLink>
+            @* Reports are org-wide data — gated on the ViewReports right (or global admin). *@
+            @if (_me is not null && (_me.IsGlobalAdmin || HasRightInAnyOrg("ViewReports")))
+            {
+                <MudNavLink Href="reports" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Assessment">Reports</MudNavLink>
+            }
 
             @* Administration group hides entirely if the user holds no admin right in
                any org AND isn't a global admin. Otherwise each link is gated on a

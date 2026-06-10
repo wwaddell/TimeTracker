@@ -182,6 +182,7 @@ app.MapCalendarEndpoints();
 app.MapGlobalAdminEndpoints();
 app.MapMeEndpoints();
 app.MapProjectEndpoints();
+app.MapReportEndpoints();
 
 // SPA fallback: any non-API, non-static path falls through to index.html so client-side
 // routing (Blazor) handles it. /api/* won't reach here because the minimal API endpoints

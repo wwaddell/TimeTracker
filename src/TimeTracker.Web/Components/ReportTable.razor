@@ -1,0 +1,64 @@
+@using System.Reflection
+
+@*  Generic report results table: columns from the row type's properties, values via
+    reflection. Lets one component render every report — the row records in
+    Contracts/Reports are designed to be flat and display-ready. *@
+
+@if (Rows.Count == 0)
+{
+    <MudText Class="mud-text-secondary pa-4">No rows for the selected parameters.</MudText>
+}
+else
+{
+    <MudSimpleTable Dense="true" Hover="true" Class="mt-2" Style="overflow-x:auto">
+        <thead>
+            <tr>
+                @foreach (var p in _props)
+                {
+                    <th style="white-space:nowrap; text-align:@(IsNumeric(p) ? "right" : "left")">@Humanize(p.Name)</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Rows)
+            {
+                <tr>
+                    @foreach (var p in _props)
+                    {
+                        <td style="text-align:@(IsNumeric(p) ? "right" : "left")">@Format(p.GetValue(row))</td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">@Rows.Count rows</MudText>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<object> Rows { get; set; } = [];
+
+    private PropertyInfo[] _props = [];
+
+    protected override void OnParametersSet() =>
+        _props = Rows.Count > 0 ? Rows[0].GetType().GetProperties() : [];
+
+    // "EstimatedHours" -> "Estimated Hours"
+    private static string Humanize(string name) =>
+        string.Concat(name.Select((c, i) => i > 0 && char.IsUpper(c) ? " " + c : c.ToString()));
+
+    private static bool IsNumeric(PropertyInfo p)
+    {
+        var t = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
+        return t == typeof(int) || t == typeof(long) || t == typeof(decimal) || t == typeof(double);
+    }
+
+    private static string Format(object? value) => value switch
+    {
+        null => "",
+        DateOnly d => d.ToString("yyyy-MM-dd"),
+        DateTime dt => dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
+        bool b => b ? "Yes" : "",
+        decimal m => m.ToString("0.##"),
+        _ => value.ToString() ?? "",
+    };
+}

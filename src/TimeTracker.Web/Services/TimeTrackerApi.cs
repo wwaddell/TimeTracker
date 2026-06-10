@@ -6,6 +6,7 @@ using TimeTracker.Contracts.Me;
 using TimeTracker.Contracts.Members;
 using TimeTracker.Contracts.Organizations;
 using TimeTracker.Contracts.Projects;
+using TimeTracker.Contracts.Reports;
 using TimeTracker.Contracts.Rights;
 using TimeTracker.Contracts.Roles;
 using TimeTracker.Contracts.Tasks;
@@ -209,6 +210,43 @@ public class TimeTrackerApi(HttpClient http)
 
     public async Task<ApiResult> RemoveOrgAdminAsync(int orgId, int userId) =>
         await SendAsync(() => http.DeleteAsync($"/api/admin/organizations/{orgId}/admins/{userId}"));
+
+    // --- Reports (ViewReports right) ---
+
+    public async Task<IReadOnlyList<TimeDetailRow>> GetTimeDetailReportAsync(
+        int orgId, DateOnly from, DateOnly to, int? projectId = null, int? userId = null) =>
+        await GetAsync<List<TimeDetailRow>>(
+            $"/api/organizations/{orgId}/reports/time-detail?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}"
+            + (projectId is { } p ? $"&projectId={p}" : "") + (userId is { } u ? $"&userId={u}" : "")) ?? [];
+
+    public async Task<IReadOnlyList<TimeByProjectRow>> GetTimeByProjectReportAsync(int orgId, DateOnly from, DateOnly to) =>
+        await GetAsync<List<TimeByProjectRow>>(
+            $"/api/organizations/{orgId}/reports/time-by-project?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}") ?? [];
+
+    public async Task<IReadOnlyList<TimeByPersonRow>> GetTimeByPersonReportAsync(int orgId, DateOnly from, DateOnly to) =>
+        await GetAsync<List<TimeByPersonRow>>(
+            $"/api/organizations/{orgId}/reports/time-by-person?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}") ?? [];
+
+    public async Task<IReadOnlyList<TimeByPeriodRow>> GetTimeByPeriodReportAsync(
+        int orgId, DateOnly from, DateOnly to, string bucket) =>
+        await GetAsync<List<TimeByPeriodRow>>(
+            $"/api/organizations/{orgId}/reports/time-by-period?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}&bucket={bucket}") ?? [];
+
+    public async Task<IReadOnlyList<TaskCompletedRow>> GetTasksCompletedReportAsync(
+        int orgId, DateOnly from, DateOnly to, int? assigneeId = null) =>
+        await GetAsync<List<TaskCompletedRow>>(
+            $"/api/organizations/{orgId}/reports/tasks-completed?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}"
+            + (assigneeId is { } a ? $"&assigneeId={a}" : "")) ?? [];
+
+    public async Task<IReadOnlyList<OpenTaskRow>> GetOpenTasksReportAsync(
+        int orgId, int? assigneeId = null, int? projectId = null, bool overdueOnly = false) =>
+        await GetAsync<List<OpenTaskRow>>(
+            $"/api/organizations/{orgId}/reports/open-tasks?overdueOnly={overdueOnly}"
+            + (assigneeId is { } a ? $"&assigneeId={a}" : "") + (projectId is { } p ? $"&projectId={p}" : "")) ?? [];
+
+    public async Task<IReadOnlyList<IncompleteEntryRow>> GetIncompleteEntriesReportAsync(int orgId, DateOnly from, DateOnly to) =>
+        await GetAsync<List<IncompleteEntryRow>>(
+            $"/api/organizations/{orgId}/reports/incomplete-entries?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}") ?? [];
 
     // --- Global admin: system-wide users ---
 
