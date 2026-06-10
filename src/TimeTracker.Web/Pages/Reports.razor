@@ -54,9 +54,14 @@ else
         {
             <MudExpansionPanel>
                 <TitleContent>
-                    <div>
-                        <MudText Typo="Typo.subtitle1"><b>@report.Name</b></MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@report.Description</MudText>
+                    <div class="d-flex align-center" style="gap:.9rem">
+                        <MudAvatar Color="@report.IconColor" Variant="Variant.Outlined">
+                            <MudIcon Icon="@report.Icon" />
+                        </MudAvatar>
+                        <div>
+                            <MudText Typo="Typo.subtitle1"><b>@report.Name</b></MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@report.Description</MudText>
+                        </div>
                     </div>
                 </TitleContent>
                 <ChildContent>
@@ -139,6 +144,8 @@ else
         string Key,
         string Name,
         string Description,
+        string Icon,
+        Color IconColor,
         bool HasDateRange = true,
         bool HasProject = false,
         bool HasPerson = false,
@@ -148,23 +155,52 @@ else
     private readonly List<ReportDef> _catalog =
     [
         new("time-detail", "Time detail",
-            "Every time entry in the range — date, person, project, task, note, and minutes.",
+            "The full audit trail of logged work: every time entry in the date range with its "
+            + "date, person, project, task, note, and minutes. Filter to a single project or "
+            + "person to answer questions like \"what did we do for client X last month?\" or "
+            + "\"what did Sam log last week?\". This is the report to export when someone wants "
+            + "the raw data behind an invoice or status update.",
+            Icons.Material.Filled.Receipt, Color.Primary,
             HasProject: true, HasPerson: true),
         new("time-by-project", "Time by project",
-            "Total hours and entry counts per project."),
+            "Where the organization's hours actually went: total time and entry counts rolled "
+            + "up per project for the date range, biggest first. Entries logged without a "
+            + "project group under \"(No project)\" so untracked work stays visible instead of "
+            + "silently disappearing. Useful for invoicing, budget burn-down, and spotting "
+            + "projects quietly consuming more time than planned.",
+            Icons.Material.Filled.WorkOutline, Color.Primary),
         new("time-by-person", "Time by person",
-            "Total hours and entry counts per member."),
+            "Total hours and entry counts per team member for the date range, highest first. "
+            + "Shows who's carrying the logging load — and who may have stopped logging "
+            + "entirely. A person missing from this list logged nothing in the range.",
+            Icons.Material.Filled.People, Color.Primary),
         new("time-by-period", "Time by period",
-            "Totals bucketed by day, week, or month — a simple trend view.",
+            "The organization's logged hours as a trend: totals bucketed by day, week, or "
+            + "month across the date range. Weeks start on your configured first day of week "
+            + "(see your profile). Good for spotting busy stretches, slow weeks, and whether "
+            + "logging habits are holding steady over time.",
+            Icons.Material.Filled.Timeline, Color.Primary,
             HasBucket: true),
         new("tasks-completed", "Tasks completed",
-            "Tasks closed in the range, with estimated vs actual hours.",
+            "What got finished: every task marked complete during the date range (a task that "
+            + "was completed and then reopened doesn't count). Includes who it was assigned "
+            + "to, when it closed, and estimated vs actual hours — the actual being all time "
+            + "ever logged against the task — so estimate accuracy is visible at a glance.",
+            Icons.Material.Filled.TaskAlt, Color.Success,
             HasPerson: true),
         new("open-tasks", "Open tasks snapshot",
-            "Currently open tasks with age, priority, due date and progress.",
+            "Everything still in flight right now (no date range — it's a snapshot). Each open "
+            + "task shows its assignee, priority, due date, percent complete, and age in days "
+            + "since creation. Flip on \"Overdue only\" for the past-due list. Sorted so the "
+            + "tasks due soonest are at the top.",
+            Icons.Material.Filled.PendingActions, Color.Warning,
             HasDateRange: false, HasProject: true, HasPerson: true, HasOverdueToggle: true),
         new("incomplete-entries", "Incomplete entries",
-            "Entries missing required fields — a cleanup chase list."),
+            "The cleanup chase list: time entries in the date range that are missing one or "
+            + "more required fields (taking into account which fields apply to each person's "
+            + "role). Each row names exactly which fields are blank, so you can chase the "
+            + "right person before invoicing or month-end close.",
+            Icons.Material.Filled.ErrorOutline, Color.Error),
     ];
 
     private IReadOnlyList<OrganizationDto>? organizations;
