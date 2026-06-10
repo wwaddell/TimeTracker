@@ -184,9 +184,14 @@ app.MapMeEndpoints();
 app.MapProjectEndpoints();
 app.MapReportEndpoints();
 
-// SPA fallback: any non-API, non-static path falls through to index.html so client-side
-// routing (Blazor) handles it. /api/* won't reach here because the minimal API endpoints
-// above match first; static files are intercepted by UseStaticFiles earlier.
+// Unknown /api/* routes must 404, not fall through to the SPA below — otherwise a
+// client calling an endpoint the server doesn't have yet (deploy version skew) receives
+// index.html with a 200 and fails with a confusing JSON-parse error instead of a clean
+// "not found".
+app.Map("/api/{**rest}", () => Results.NotFound());
+
+// SPA fallback: any other non-static path falls through to index.html so client-side
+// routing (Blazor) handles it. Real API endpoints match before the catch-all above.
 app.MapFallbackToFile("index.html");
 
 app.Run();

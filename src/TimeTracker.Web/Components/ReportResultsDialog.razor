@@ -28,10 +28,13 @@
     <DialogActions>
         @if (Rows.Count > 0)
         {
-            <MudButton Variant="Variant.Outlined" Size="Size.Small" Class="me-auto"
-                       StartIcon="@Icons.Material.Filled.Download" OnClick="ExportJsonAsync">JSON</MudButton>
-            <MudButton Variant="Variant.Outlined" Size="Size.Small"
-                       StartIcon="@Icons.Material.Filled.Download" OnClick="ExportCsvAsync">CSV</MudButton>
+            <MudMenu Label="Export" Variant="Variant.Outlined" Size="Size.Small" Class="me-auto"
+                     StartIcon="@Icons.Material.Filled.Download"
+                     EndIcon="@Icons.Material.Filled.KeyboardArrowDown"
+                     AnchorOrigin="Origin.TopLeft" TransformOrigin="Origin.BottomLeft">
+                <MudMenuItem Icon="@Icons.Material.Filled.DataObject" OnClick="ExportJsonAsync">JSON</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.GridOn" OnClick="ExportCsvAsync">CSV</MudMenuItem>
+            </MudMenu>
         }
         <MudButton Color="Color.Primary" OnClick="Close">Close</MudButton>
     </DialogActions>
