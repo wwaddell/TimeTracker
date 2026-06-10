@@ -20,6 +20,12 @@ public class TimeTrackerApi(HttpClient http)
 
     public async Task<MeDto?> GetMeAsync() => await GetAsync<MeDto>("/api/me");
 
+    /// <summary>Deployment stamp of the running server — used by the update notifier.</summary>
+    public async Task<string?> GetServerVersionAsync() =>
+        (await GetAsync<VersionDto>("/api/version"))?.Version;
+
+    private sealed record VersionDto(string Version);
+
     public async Task<ApiResult> SaveMePreferencesAsync(SaveMePreferencesRequest request) =>
         await SendAsync(() => http.PutAsJsonAsync("/api/me/preferences", request));
 

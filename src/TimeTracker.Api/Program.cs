@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -160,6 +161,15 @@ app.Use(async (ctx, next) =>
     }
     await next();
 });
+
+// Deployment stamp for the client's update check. The CI pipeline bakes the commit SHA
+// into InformationalVersion for both this assembly and the WASM client in the same
+// publish; the client polls this endpoint and offers a reload when the values diverge
+// (i.e. a new deployment landed while the app was open). Anonymous + trivially cheap.
+var apiVersion = typeof(Program).Assembly
+    .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?
+    .InformationalVersion ?? "dev";
+app.MapGet("/api/version", () => Results.Ok(new { version = apiVersion })).AllowAnonymous();
 
 app.MapTimeTrackerEndpoints();
 app.MapTaskEndpoints();

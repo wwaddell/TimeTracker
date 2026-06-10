@@ -44,14 +44,19 @@ jobs:
       - name: Restore
         run: dotnet restore TimeTracker.slnx
 
+      # InformationalVersion is stamped with the commit SHA on every step that invokes
+      # MSBuild so the property stays consistent across build → publish (--no-build reuses
+      # the build output, which must have been produced with the same global properties).
+      # The API serves this stamp at /api/version; the WASM client compares it to its own
+      # compiled-in stamp to detect that a new deployment happened and offer a reload.
       - name: Build
-        run: dotnet build TimeTracker.slnx --configuration Release --no-restore
+        run: dotnet build TimeTracker.slnx --configuration Release --no-restore -p:InformationalVersion=${{ github.sha }}
 
       - name: Test
-        run: dotnet test TimeTracker.slnx --configuration Release --no-build --verbosity normal
+        run: dotnet test TimeTracker.slnx --configuration Release --no-build --verbosity normal -p:InformationalVersion=${{ github.sha }}
 
       - name: Publish API (includes WASM client via project ref)
-        run: dotnet publish ${{ env.API_PROJECT }} --configuration Release --no-build --output ${{ env.PUBLISH_DIR }}
+        run: dotnet publish ${{ env.API_PROJECT }} --configuration Release --no-build --output ${{ env.PUBLISH_DIR }} -p:InformationalVersion=${{ github.sha }}
 
       - name: Upload publish artifact
         uses: actions/upload-artifact@v4

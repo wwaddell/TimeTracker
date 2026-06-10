@@ -1,10 +1,13 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@using System.Reflection
 @using TimeTracker.Contracts.Me
 @using TimeTracker.Web.Services
 @using TimeTracker.Web.Theme
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 @inject TimeTrackerApi Api
+@inject ISnackbar Snackbar
 
 <MudThemeProvider @ref="_themeProvider" @bind-IsDarkMode="_isDarkMode" Theme="AppTheme.Instance" />
 <MudPopoverProvider />
@@ -142,6 +145,66 @@
             _isDarkMode = await _themeProvider.GetSystemDarkModeAsync();
         }
         StateHasChanged();
+
+        // Fire-and-forget background loop watching for a newer deployment.
+        _ = WatchForUpdatesAsync();
+    }
+
+    // --- App-update notification ---
+    // The CI pipeline stamps the commit SHA into InformationalVersion of both this WASM
+    // assembly and the API. Polling /api/version and comparing to our own compiled-in
+    // stamp detects that a new deployment landed while this tab has been open; a sticky
+    // snackbar offers a one-click full reload to pick it up. In local dev both stamps
+    // are the default "1.0.0" so the notification never fires.
+    private static readonly string ClientVersion =
+        typeof(MainLayout).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion ?? "dev";
+
+    private readonly CancellationTokenSource _updateCts = new();
+    private bool _updateNotified;
+
+    private async Task WatchForUpdatesAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(5));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_updateCts.Token))
+            {
+                if (_updateNotified)
+                {
+                    return; // already told the user once; don't nag every tick
+                }
+                try
+                {
+                    var serverVersion = await Api.GetServerVersionAsync();
+                    if (!string.IsNullOrEmpty(serverVersion) && serverVersion != ClientVersion)
+                    {
+                        _updateNotified = true;
+                        Snackbar.Add("A new version of TimeTracker is available.", Severity.Info, cfg =>
+                        {
+                            cfg.RequireInteraction = true; // stays until acted on
+                            cfg.Action = "Reload";
+                            cfg.ActionColor = Color.Primary;
+                            cfg.OnClick = _ =>
+                            {
+                                Nav.NavigateTo(Nav.Uri, forceLoad: true);
+                                return Task.CompletedTask;
+                            };
+                        });
+                        StateHasChanged();
+                    }
+                }
+                catch { /* transient (offline, auth refresh) — try again next tick */ }
+            }
+        }
+        catch (OperationCanceledException) { /* layout disposed */ }
+    }
+
+    public void Dispose()
+    {
+        _updateCts.Cancel();
+        _updateCts.Dispose();
     }
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
