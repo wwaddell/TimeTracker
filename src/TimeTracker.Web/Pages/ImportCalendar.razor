@@ -8,6 +8,7 @@
 @inject OrgSelectionState OrgState
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 @if (loadError is not null)
 {
@@ -107,7 +108,12 @@ else
                     For now (dev): leave the token blank or type <b>FAKE</b> to use sample meetings, or paste a real
                     Microsoft Graph token (e.g. from Graph Explorer) to read your actual calendar.
                 </MudText>
-                <MudTextField T="string" @bind-Value="accessToken" Label="Graph access token (optional in dev)"
+                @* Token persists in localStorage until cleared (the X) so it survives page
+                   navigation and reloads — Graph Explorer tokens last ~1h, and re-pasting
+                   on every visit was tedious. Dev-only convenience; the real Connect
+                   Outlook flow stores refresh tokens server-side instead. *@
+                <MudTextField T="string" @bind-Value="accessToken" @bind-Value:after="PersistTokenAsync"
+                              Label="Graph access token (optional in dev)" Clearable="true"
                               Variant="Variant.Outlined" Lines="2" AutoGrow="true" MaxLines="4"
                               Placeholder="Blank or FAKE = sample data" />
             </MudExpansionPanel>
@@ -269,7 +275,36 @@ else
         }
     }
 
-    protected override Task OnInitializedAsync() => ReloadAllAsync();
+    // localStorage key for the dev Graph token (see the comment on the field above).
+    private const string TokenStorageKey = "tt.dev.graphToken";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Restore the persisted dev token before the first load so a saved token is
+        // already in place when the user clicks Fetch.
+        try
+        {
+            accessToken = await JS.InvokeAsync<string?>("localStorage.getItem", TokenStorageKey);
+        }
+        catch { /* storage unavailable (private mode etc.) — start blank */ }
+        await ReloadAllAsync();
+    }
+
+    private async Task PersistTokenAsync()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(accessToken))
+            {
+                await JS.InvokeVoidAsync("localStorage.removeItem", TokenStorageKey);
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("localStorage.setItem", TokenStorageKey, accessToken);
+            }
+        }
+        catch { /* best-effort */ }
+    }
 
     private Task ReloadAllAsync() => GuardAsync(async () =>
     {
