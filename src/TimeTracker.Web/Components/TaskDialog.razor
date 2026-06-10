@@ -22,11 +22,13 @@
                       MaxLength="2000" Counter="2000"
                       AutoGrow="true" MaxLines="10" Variant="Variant.Outlined" />
         @* Pop-out editor for long descriptions: the inline field caps at 10 visible lines,
-           so once text grows past that, editing in place gets cramped. Minimal link per
-           design — bottom-left, pulled up tight against the field (the negative top margin
-           overlaps the helper-text row the character counter reserves). *@
-        <div class="d-flex mb-3 mt-n5">
-            <MudLink Typo="Typo.caption" OnClick="ExpandDescriptionAsync" Style="cursor:pointer">
+           so once text grows past that, editing in place gets cramped. The link sits in the
+           left half of the helper-text row (the counter occupies the right half), pulled up
+           by a negative margin. position:relative + z-index lift it above the MudTextField's
+           helper area so clicks land on the link, not the field underneath. *@
+        <div class="d-flex mb-3 mt-n4" style="position:relative; z-index:2; pointer-events:none">
+            <MudLink Typo="Typo.caption" OnClick="ExpandDescriptionAsync"
+                     Style="cursor:pointer; pointer-events:auto">
                 <MudIcon Icon="@Icons.Material.Filled.OpenInFull" Size="Size.Small"
                          Style="font-size:0.9rem; vertical-align:text-bottom" />
                 Open in larger editor
