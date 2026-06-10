@@ -4,6 +4,13 @@ namespace TimeTracker.Contracts.Reports;
 // generic table (columns from property names) and exports them verbatim as JSON/CSV,
 // so the shapes here ARE the export format. Keep names human-friendly.
 
+/// <summary>
+/// Report response envelope. Rows are capped server-side (see ReportEndpoints.MaxRows);
+/// <paramref name="Truncated"/> tells the client the cap was hit so it can prompt the
+/// user to narrow the parameters rather than silently presenting a partial export.
+/// </summary>
+public record ReportResult<TRow>(IReadOnlyList<TRow> Rows, bool Truncated);
+
 /// <summary>One time entry in the detail report.</summary>
 public record TimeDetailRow(
     DateOnly Date,

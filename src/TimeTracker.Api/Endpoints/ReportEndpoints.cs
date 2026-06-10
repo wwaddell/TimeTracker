@@ -16,6 +16,20 @@ namespace TimeTracker.Api.Endpoints;
 /// </summary>
 public static class ReportEndpoints
 {
+    /// <summary>
+    /// Hard cap on rows per report. Queries fetch MaxRows+1 and trim, so the response
+    /// flags Truncated without a second COUNT round-trip. Protects both the API payload
+    /// and the WASM client's render path as data grows; the client tells the user to
+    /// narrow the parameters.
+    /// </summary>
+    private const int MaxRows = 2000;
+
+    private static ReportResult<T> Capped<T>(List<T> rows)
+    {
+        var truncated = rows.Count > MaxRows;
+        return new ReportResult<T>(truncated ? rows.Take(MaxRows).ToList() : rows, truncated);
+    }
+
     public static void MapReportEndpoints(this IEndpointRouteBuilder app)
     {
         var grp = app.MapGroup("/api/organizations/{orgId:int}/reports").RequireAuthorization();
@@ -50,9 +64,10 @@ public static class ReportEndpoints
                     e.Task != null ? e.Task.Title : null,
                     e.Note,
                     e.DurationMinutes))
+                .Take(MaxRows + 1)
                 .ToListAsync();
 
-            return Results.Ok(rows);
+            return Results.Ok(Capped(rows));
         });
 
         // Total time per project. Unassigned entries group under "(No project)".
@@ -74,10 +89,11 @@ public static class ReportEndpoints
                     Minutes = g.Sum(e => e.DurationMinutes ?? 0),
                 })
                 .OrderByDescending(x => x.Minutes)
+                .Take(MaxRows + 1)
                 .ToListAsync();
 
-            return Results.Ok(rows.Select(x =>
-                new TimeByProjectRow(x.Project, x.Entries, x.Minutes, ToHours(x.Minutes))).ToList());
+            return Results.Ok(Capped(rows.Select(x =>
+                new TimeByProjectRow(x.Project, x.Entries, x.Minutes, ToHours(x.Minutes))).ToList()));
         });
 
         // Total time per member.
@@ -99,10 +115,11 @@ public static class ReportEndpoints
                     Minutes = g.Sum(e => e.DurationMinutes ?? 0),
                 })
                 .OrderByDescending(x => x.Minutes)
+                .Take(MaxRows + 1)
                 .ToListAsync();
 
-            return Results.Ok(rows.Select(x =>
-                new TimeByPersonRow(x.Person, x.Entries, x.Minutes, ToHours(x.Minutes))).ToList());
+            return Results.Ok(Capped(rows.Select(x =>
+                new TimeByPersonRow(x.Person, x.Entries, x.Minutes, ToHours(x.Minutes))).ToList()));
         });
 
         // Total time per day/week/month bucket. Week start honors the requesting user's
@@ -148,7 +165,7 @@ public static class ReportEndpoints
                 .Select(x => new TimeByPeriodRow(x.Period, x.Entries, x.Minutes, ToHours(x.Minutes)))
                 .ToList();
 
-            return Results.Ok(rows);
+            return Results.Ok(Capped(rows));
         });
 
         // Tasks completed in the range. "Completed" = the audit history recorded an
@@ -189,11 +206,12 @@ public static class ReportEndpoints
                     ActualMinutes = x.t.TimeEntries.Sum(e => e.DurationMinutes ?? 0),
                 })
                 .OrderBy(x => x.CompletedUtc)
+                .Take(MaxRows + 1)
                 .ToListAsync();
 
-            return Results.Ok(rows.Select(x => new TaskCompletedRow(
+            return Results.Ok(Capped(rows.Select(x => new TaskCompletedRow(
                 x.Title, x.AssignedTo, x.Project, x.CompletedUtc,
-                x.EstimatedHours, ToHours(x.ActualMinutes))).ToList());
+                x.EstimatedHours, ToHours(x.ActualMinutes))).ToList()));
         });
 
         // Snapshot of currently open tasks. Age counts from creation; Overdue compares
@@ -236,6 +254,7 @@ public static class ReportEndpoints
                     t.PercentComplete,
                     t.CreatedUtc,
                 })
+                .Take(MaxRows + 1)
                 .ToListAsync();
 
             var rows = tasks.Select(t => new OpenTaskRow(
@@ -248,7 +267,7 @@ public static class ReportEndpoints
                 Math.Max(0, today.DayNumber - DateOnly.FromDateTime(t.CreatedUtc).DayNumber),
                 t.DueDate is { } due && due < today)).ToList();
 
-            return Results.Ok(rows);
+            return Results.Ok(Capped(rows));
         });
 
         // Entries in the range missing required configurable fields. "Required for this
@@ -268,7 +287,7 @@ public static class ReportEndpoints
                 .ToListAsync();
             if (requiredFields.Count == 0)
             {
-                return Results.Ok(new List<IncompleteEntryRow>());
+                return Results.Ok(new ReportResult<IncompleteEntryRow>([], false));
             }
 
             // userId -> role ids held in this org, for resolving role-scoped fields.
@@ -310,7 +329,7 @@ public static class ReportEndpoints
                 }
             }
 
-            return Results.Ok(rows.OrderBy(r => r.Date).ToList());
+            return Results.Ok(Capped(rows.OrderBy(r => r.Date).ToList()));
         });
     }
 

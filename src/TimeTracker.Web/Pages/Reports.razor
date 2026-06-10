@@ -1,5 +1,4 @@
 @page "/reports"
-@using System.Text.Json
 @using TimeTracker.Contracts.Members
 @using TimeTracker.Contracts.Projects
 @using TimeTracker.Contracts.TimeEntries
@@ -8,7 +7,7 @@
 @inject TimeTrackerApi Api
 @inject OrgSelectionState OrgState
 @inject ISnackbar Snackbar
-@inject IJSRuntime JS
+@inject IDialogService DialogService
 
 <PageTitle>Reports</PageTitle>
 
@@ -114,24 +113,11 @@ else
                                    OnClick="@(() => RunAsync(report))" Disabled="@running">
                             Run
                         </MudButton>
-                        @if (Results(report.Key) is { Count: > 0 })
-                        {
-                            <MudButton Variant="Variant.Outlined" Size="Size.Small"
-                                       StartIcon="@Icons.Material.Filled.Download"
-                                       OnClick="@(() => ExportJsonAsync(report))">JSON</MudButton>
-                            <MudButton Variant="Variant.Outlined" Size="Size.Small"
-                                       StartIcon="@Icons.Material.Filled.Download"
-                                       OnClick="@(() => ExportCsvAsync(report))">CSV</MudButton>
-                        }
                     </div>
 
                     @if (running && runningKey == report.Key)
                     {
                         <MudProgressLinear Indeterminate="true" />
-                    }
-                    else if (ranKeys.Contains(report.Key))
-                    {
-                        <ReportTable Rows="Results(report.Key)" />
                     }
                 </ChildContent>
             </MudExpansionPanel>
@@ -218,8 +204,6 @@ else
     private string bucket = "week";
     private bool overdueOnly;
 
-    private readonly Dictionary<string, IReadOnlyList<object>> results = [];
-    private readonly HashSet<string> ranKeys = [];
     private bool running;
     private string? runningKey;
 
@@ -234,8 +218,6 @@ else
         get => to.ToDateTime(TimeOnly.MinValue);
         set => to = value is { } d ? DateOnly.FromDateTime(d) : to;
     }
-
-    private IReadOnlyList<object> Results(string key) => results.GetValueOrDefault(key) ?? [];
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -283,8 +265,6 @@ else
     {
         selectedOrgId = orgId;
         OrgState.OrgId = orgId; // sticky across pages for this session
-        results.Clear();
-        ranKeys.Clear();
         projectId = null;
         personId = null;
         try
@@ -301,75 +281,51 @@ else
     {
         running = true;
         runningKey = report.Key;
+        IReadOnlyList<object> rows;
+        bool truncated;
         try
         {
-            IReadOnlyList<object> rows = report.Key switch
+            (rows, truncated) = report.Key switch
             {
-                "time-detail" => await Api.GetTimeDetailReportAsync(selectedOrgId, from, to, projectId, personId),
-                "time-by-project" => await Api.GetTimeByProjectReportAsync(selectedOrgId, from, to),
-                "time-by-person" => await Api.GetTimeByPersonReportAsync(selectedOrgId, from, to),
-                "time-by-period" => await Api.GetTimeByPeriodReportAsync(selectedOrgId, from, to, bucket),
-                "tasks-completed" => await Api.GetTasksCompletedReportAsync(selectedOrgId, from, to, personId),
-                "open-tasks" => await Api.GetOpenTasksReportAsync(selectedOrgId, personId, projectId, overdueOnly),
-                "incomplete-entries" => await Api.GetIncompleteEntriesReportAsync(selectedOrgId, from, to),
-                _ => [],
+                "time-detail" => Unwrap(await Api.GetTimeDetailReportAsync(selectedOrgId, from, to, projectId, personId)),
+                "time-by-project" => Unwrap(await Api.GetTimeByProjectReportAsync(selectedOrgId, from, to)),
+                "time-by-person" => Unwrap(await Api.GetTimeByPersonReportAsync(selectedOrgId, from, to)),
+                "time-by-period" => Unwrap(await Api.GetTimeByPeriodReportAsync(selectedOrgId, from, to, bucket)),
+                "tasks-completed" => Unwrap(await Api.GetTasksCompletedReportAsync(selectedOrgId, from, to, personId)),
+                "open-tasks" => Unwrap(await Api.GetOpenTasksReportAsync(selectedOrgId, personId, projectId, overdueOnly)),
+                "incomplete-entries" => Unwrap(await Api.GetIncompleteEntriesReportAsync(selectedOrgId, from, to)),
+                _ => ([], false),
             };
-            results[report.Key] = rows;
-            ranKeys.Add(report.Key);
         }
         catch (ApiException ex)
         {
             Snackbar.Add(ex.Message, Severity.Error);
+            return;
         }
         catch (Exception)
         {
             Snackbar.Add("Running the report failed. You may not have the View Reports right in this organization.", Severity.Error);
+            return;
         }
         finally
         {
             running = false;
             runningKey = null;
         }
-    }
 
-    private string ExportBaseName(ReportDef report) =>
-        report.HasDateRange ? $"{report.Key}_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}" : report.Key;
-
-    private async Task ExportJsonAsync(ReportDef report)
-    {
-        var rows = Results(report.Key);
-        var json = JsonSerializer.Serialize(rows, new JsonSerializerOptions { WriteIndented = true });
-        await JS.InvokeVoidAsync("ttDownload", $"{ExportBaseName(report)}.json", "application/json", json);
-    }
-
-    private async Task ExportCsvAsync(ReportDef report)
-    {
-        var rows = Results(report.Key);
-        if (rows.Count == 0)
+        // Results open in their own dialog: paged table + export buttons live there.
+        var parameters = new DialogParameters<ReportResultsDialog>
         {
-            return;
-        }
-
-        var props = rows[0].GetType().GetProperties();
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine(string.Join(",", props.Select(p => CsvEscape(p.Name))));
-        foreach (var row in rows)
-        {
-            sb.AppendLine(string.Join(",", props.Select(p => CsvEscape(CsvValue(p.GetValue(row))))));
-        }
-        await JS.InvokeVoidAsync("ttDownload", $"{ExportBaseName(report)}.csv", "text/csv", sb.ToString());
+            { x => x.Rows, rows },
+            { x => x.Truncated, truncated },
+            { x => x.ExportBaseName, report.HasDateRange ? $"{report.Key}_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}" : report.Key },
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true };
+        await DialogService.ShowAsync<ReportResultsDialog>(report.Name, parameters, options);
     }
 
-    private static string CsvValue(object? value) => value switch
-    {
-        null => "",
-        DateOnly d => d.ToString("yyyy-MM-dd"),
-        DateTime dt => dt.ToString("o"),
-        _ => value.ToString() ?? "",
-    };
-
-    private static string CsvEscape(string value) =>
-        value.Contains(',') || value.Contains('"') || value.Contains('\n')
-            ? $"\"{value.Replace("\"", "\"\"")}\""
-            : value;
+    // Flatten the typed envelope into (object rows, truncated) for the generic dialog.
+    private static (IReadOnlyList<object> Rows, bool Truncated) Unwrap<T>(TimeTracker.Contracts.Reports.ReportResult<T> result)
+        where T : class =>
+        (result.Rows, result.Truncated);
 }

@@ -213,40 +213,47 @@ public class TimeTrackerApi(HttpClient http)
 
     // --- Reports (ViewReports right) ---
 
-    public async Task<IReadOnlyList<TimeDetailRow>> GetTimeDetailReportAsync(
+    public async Task<ReportResult<TimeDetailRow>> GetTimeDetailReportAsync(
         int orgId, DateOnly from, DateOnly to, int? projectId = null, int? userId = null) =>
-        await GetAsync<List<TimeDetailRow>>(
+        await GetAsync<ReportResult<TimeDetailRow>>(
             $"/api/organizations/{orgId}/reports/time-detail?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}"
-            + (projectId is { } p ? $"&projectId={p}" : "") + (userId is { } u ? $"&userId={u}" : "")) ?? [];
+            + (projectId is { } p ? $"&projectId={p}" : "") + (userId is { } u ? $"&userId={u}" : ""))
+        ?? new ReportResult<TimeDetailRow>([], false);
 
-    public async Task<IReadOnlyList<TimeByProjectRow>> GetTimeByProjectReportAsync(int orgId, DateOnly from, DateOnly to) =>
-        await GetAsync<List<TimeByProjectRow>>(
-            $"/api/organizations/{orgId}/reports/time-by-project?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}") ?? [];
+    public async Task<ReportResult<TimeByProjectRow>> GetTimeByProjectReportAsync(int orgId, DateOnly from, DateOnly to) =>
+        await GetAsync<ReportResult<TimeByProjectRow>>(
+            $"/api/organizations/{orgId}/reports/time-by-project?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}")
+        ?? new ReportResult<TimeByProjectRow>([], false);
 
-    public async Task<IReadOnlyList<TimeByPersonRow>> GetTimeByPersonReportAsync(int orgId, DateOnly from, DateOnly to) =>
-        await GetAsync<List<TimeByPersonRow>>(
-            $"/api/organizations/{orgId}/reports/time-by-person?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}") ?? [];
+    public async Task<ReportResult<TimeByPersonRow>> GetTimeByPersonReportAsync(int orgId, DateOnly from, DateOnly to) =>
+        await GetAsync<ReportResult<TimeByPersonRow>>(
+            $"/api/organizations/{orgId}/reports/time-by-person?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}")
+        ?? new ReportResult<TimeByPersonRow>([], false);
 
-    public async Task<IReadOnlyList<TimeByPeriodRow>> GetTimeByPeriodReportAsync(
+    public async Task<ReportResult<TimeByPeriodRow>> GetTimeByPeriodReportAsync(
         int orgId, DateOnly from, DateOnly to, string bucket) =>
-        await GetAsync<List<TimeByPeriodRow>>(
-            $"/api/organizations/{orgId}/reports/time-by-period?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}&bucket={bucket}") ?? [];
+        await GetAsync<ReportResult<TimeByPeriodRow>>(
+            $"/api/organizations/{orgId}/reports/time-by-period?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}&bucket={bucket}")
+        ?? new ReportResult<TimeByPeriodRow>([], false);
 
-    public async Task<IReadOnlyList<TaskCompletedRow>> GetTasksCompletedReportAsync(
+    public async Task<ReportResult<TaskCompletedRow>> GetTasksCompletedReportAsync(
         int orgId, DateOnly from, DateOnly to, int? assigneeId = null) =>
-        await GetAsync<List<TaskCompletedRow>>(
+        await GetAsync<ReportResult<TaskCompletedRow>>(
             $"/api/organizations/{orgId}/reports/tasks-completed?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}"
-            + (assigneeId is { } a ? $"&assigneeId={a}" : "")) ?? [];
+            + (assigneeId is { } a ? $"&assigneeId={a}" : ""))
+        ?? new ReportResult<TaskCompletedRow>([], false);
 
-    public async Task<IReadOnlyList<OpenTaskRow>> GetOpenTasksReportAsync(
+    public async Task<ReportResult<OpenTaskRow>> GetOpenTasksReportAsync(
         int orgId, int? assigneeId = null, int? projectId = null, bool overdueOnly = false) =>
-        await GetAsync<List<OpenTaskRow>>(
+        await GetAsync<ReportResult<OpenTaskRow>>(
             $"/api/organizations/{orgId}/reports/open-tasks?overdueOnly={overdueOnly}"
-            + (assigneeId is { } a ? $"&assigneeId={a}" : "") + (projectId is { } p ? $"&projectId={p}" : "")) ?? [];
+            + (assigneeId is { } a ? $"&assigneeId={a}" : "") + (projectId is { } p ? $"&projectId={p}" : ""))
+        ?? new ReportResult<OpenTaskRow>([], false);
 
-    public async Task<IReadOnlyList<IncompleteEntryRow>> GetIncompleteEntriesReportAsync(int orgId, DateOnly from, DateOnly to) =>
-        await GetAsync<List<IncompleteEntryRow>>(
-            $"/api/organizations/{orgId}/reports/incomplete-entries?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}") ?? [];
+    public async Task<ReportResult<IncompleteEntryRow>> GetIncompleteEntriesReportAsync(int orgId, DateOnly from, DateOnly to) =>
+        await GetAsync<ReportResult<IncompleteEntryRow>>(
+            $"/api/organizations/{orgId}/reports/incomplete-entries?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}")
+        ?? new ReportResult<IncompleteEntryRow>([], false);
 
     // --- Global admin: system-wide users ---
 
