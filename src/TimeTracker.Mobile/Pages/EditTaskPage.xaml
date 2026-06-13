@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="TimeTracker.Mobile.Pages.EditTaskPage"
+             Title="Task">
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="14">
+
+            <Label Text="Title" FontAttributes="Bold" />
+            <Entry x:Name="TitleEntry" Placeholder="Task title" MaxLength="200" />
+
+            <Label Text="Description" FontAttributes="Bold" />
+            <Editor x:Name="DescriptionEditor" AutoSize="TextChanges" MinimumHeightRequest="100"
+                    Placeholder="Details (optional)" MaxLength="2000" />
+
+            <Label Text="Project" FontAttributes="Bold" />
+            <Picker x:Name="ProjectPicker" Title="No project" />
+
+            <Label Text="Priority" FontAttributes="Bold" />
+            <Picker x:Name="PriorityPicker" Title="No priority" />
+
+            <Label Text="Due date" FontAttributes="Bold" />
+            <Grid ColumnDefinitions="*,Auto">
+                <DatePicker x:Name="DueDatePicker" Grid.Column="0" Format="ddd, MMM d, yyyy" />
+                <Button Grid.Column="1" Text="Clear" Clicked="OnClearDueDate" />
+            </Grid>
+
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <VerticalStackLayout Grid.Column="0">
+                    <Label Text="Percent complete" FontAttributes="Bold" />
+                    <Label x:Name="PercentLabel" Text="0%" TextColor="{StaticResource Primary}" />
+                </VerticalStackLayout>
+                <Switch x:Name="CompleteSwitch" Grid.Column="1" Toggled="OnCompleteToggled" VerticalOptions="Center" />
+            </Grid>
+            <Slider x:Name="PercentSlider" Minimum="0" Maximum="100" ValueChanged="OnPercentChanged" />
+
+            <Label x:Name="ErrorLabel" IsVisible="False" TextColor="{StaticResource Error}" />
+
+            <Button x:Name="SaveButton" Text="Save" Clicked="OnSaveClicked"
+                    BackgroundColor="{StaticResource Primary}" TextColor="White" />
+            <Button Text="Log time to this task" Clicked="OnLogTimeClicked"
+                    x:Name="LogTimeButton" IsVisible="False"
+                    BackgroundColor="Transparent" TextColor="{StaticResource Primary}" />
+
+        </VerticalStackLayout>
+    </ScrollView>

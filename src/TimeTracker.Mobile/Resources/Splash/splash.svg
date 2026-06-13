@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Splash mark on transparent canvas; MAUI fills the screen with Color="#2563EB". -->
+  <g fill="none" stroke="#ffffff">
+    <circle cx="32" cy="32" r="22" stroke-width="2.5"/>
+    <circle cx="32" cy="13" r="1.8" fill="#ffffff" stroke="none"/>
+    <circle cx="51" cy="32" r="1.8" fill="#ffffff" stroke="none"/>
+    <circle cx="32" cy="51" r="1.8" fill="#ffffff" stroke="none"/>
+    <circle cx="13" cy="32" r="1.8" fill="#ffffff" stroke="none"/>
+    <path d="M21 34 L29 42 L45 24" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

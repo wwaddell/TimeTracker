@@ -4,6 +4,7 @@
     <Project Path="src/TimeTracker.Contracts/TimeTracker.Contracts.csproj" />
     <Project Path="src/TimeTracker.Domain/TimeTracker.Domain.csproj" />
     <Project Path="src/TimeTracker.Infrastructure/TimeTracker.Infrastructure.csproj" />
+    <Project Path="src/TimeTracker.Mobile/TimeTracker.Mobile.csproj" />
     <Project Path="src/TimeTracker.Web/TimeTracker.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
