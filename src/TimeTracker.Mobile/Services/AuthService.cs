@@ -21,7 +21,7 @@ public class AuthService
 
 #if ANDROID
         // Required so MSAL can launch + return from the system browser / custom tab.
-        builder = builder.WithParentActivityOrWindow(() => Platform.CurrentActivity);
+        builder = builder.WithParentActivityOrWindow(() => Microsoft.Maui.ApplicationModel.Platform.CurrentActivity);
 #endif
 
         _pca = builder.Build();

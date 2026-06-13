@@ -99,7 +99,7 @@ public partial class EditTaskPage : ContentPage
         int? projectId = ProjectPicker.SelectedIndex > 0 ? _projects[ProjectPicker.SelectedIndex - 1].Id : null;
         TaskPriority? priority = PriorityPicker.SelectedIndex > 0 ? Priorities[PriorityPicker.SelectedIndex - 1] : null;
         // A new task keeps the chosen due date unless cleared; editing respects the Clear button.
-        DateOnly? dueDate = _dueDateCleared ? null : DateOnly.FromDateTime(DueDatePicker.Date);
+        DateOnly? dueDate = _dueDateCleared ? null : DateOnly.FromDateTime((DateTime)DueDatePicker.Date);
 
         var request = new SaveTaskRequest
         {

@@ -76,7 +76,7 @@ public partial class LogTimePage : ContentPage
         }
         catch (ApiException ex)
         {
-            await DisplayAlert("Couldn't load entries", ex.Message, "OK");
+            await DisplayAlertAsync("Couldn't load entries", ex.Message, "OK");
         }
     }
 

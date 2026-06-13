@@ -74,7 +74,7 @@ public partial class TasksPage : ContentPage
         }
         catch (ApiException ex)
         {
-            await DisplayAlert("Couldn't load tasks", ex.Message, "OK");
+            await DisplayAlertAsync("Couldn't load tasks", ex.Message, "OK");
         }
     }
 

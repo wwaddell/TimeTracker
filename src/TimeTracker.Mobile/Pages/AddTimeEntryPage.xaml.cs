@@ -83,7 +83,7 @@ public partial class AddTimeEntryPage : ContentPage
         var request = new CreateTimeEntryRequest
         {
             Note = NoteEditor.Text.Trim(),
-            EntryDate = DateOnly.FromDateTime(DatePickerCtl.Date),
+            EntryDate = DateOnly.FromDateTime((DateTime)DatePickerCtl.Date),
             DurationMinutes = duration,
             ProjectId = projectId,
             TaskId = taskId,
@@ -115,7 +115,7 @@ public partial class AddTimeEntryPage : ContentPage
 
     private async void OnDeleteClicked(object? sender, EventArgs e)
     {
-        if (_entry is null || !await DisplayAlert("Delete entry", "Delete this time entry?", "Delete", "Cancel"))
+        if (_entry is null || !await DisplayAlertAsync("Delete entry", "Delete this time entry?", "Delete", "Cancel"))
         {
             return;
         }
