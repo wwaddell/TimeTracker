@@ -1,37 +1,38 @@
-using TimeTracker.Contracts.Me;
-using TimeTracker.Contracts.TimeEntries;
+using TimeTracker.Mobile.Data;
 
 namespace TimeTracker.Mobile.Services;
 
 /// <summary>
-/// Singleton holding session state shared across pages: the signed-in user, the orgs they
-/// belong to, and the currently-selected org (sticky while the app is open, like the web
-/// app's OrgSelectionState). Pages read/write this instead of re-fetching on every nav.
+/// Session state shared across pages: the orgs the user belongs to (from the local cache,
+/// so available offline) and the sticky selected org. The selection persists across app
+/// launches via Preferences.
 /// </summary>
 public class AppState
 {
-    public MeDto? Me { get; set; }
-    public IReadOnlyList<OrganizationDto> Organizations { get; set; } = [];
-    public int SelectedOrgId { get; set; }
+    private const string SelectedOrgKey = "tt.selectedOrgId";
 
-    public OrganizationDto? SelectedOrg =>
-        Organizations.FirstOrDefault(o => o.Id == SelectedOrgId);
+    public IReadOnlyList<LocalOrg> Organizations { get; private set; } = [];
 
-    /// <summary>Pick a sensible default org: the user's default if set + present, else the first.</summary>
-    public void EnsureSelection()
+    public int SelectedOrgId
     {
+        get => Preferences.Get(SelectedOrgKey, 0);
+        set => Preferences.Set(SelectedOrgKey, value);
+    }
+
+    public LocalOrg? SelectedOrg => Organizations.FirstOrDefault(o => o.Id == SelectedOrgId);
+
+    /// <summary>Refresh the org list from the local cache and make sure a valid org is selected.</summary>
+    public async Task LoadOrgsAsync(DataService data)
+    {
+        Organizations = await data.GetOrgsAsync();
         if (Organizations.Count == 0)
         {
             SelectedOrgId = 0;
             return;
         }
-        if (SelectedOrgId != 0 && Organizations.Any(o => o.Id == SelectedOrgId))
+        if (SelectedOrgId == 0 || Organizations.All(o => o.Id != SelectedOrgId))
         {
-            return;
+            SelectedOrgId = Organizations[0].Id;
         }
-        var preferred = Me?.DefaultOrganizationId;
-        SelectedOrgId = preferred is { } p && Organizations.Any(o => o.Id == p)
-            ? p
-            : Organizations[0].Id;
     }
 }

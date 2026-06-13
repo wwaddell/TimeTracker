@@ -1,15 +1,22 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:tk="clr-namespace:TimeTracker.Contracts.Tasks;assembly=TimeTracker.Contracts"
+             xmlns:data="clr-namespace:TimeTracker.Mobile.Data"
              x:Class="TimeTracker.Mobile.Pages.TasksPage"
              Title="Tasks">
-    <Grid RowDefinitions="Auto,*">
+    <Grid RowDefinitions="Auto,Auto,*">
 
-        <Picker x:Name="OrgPicker" Grid.Row="0" Title="Organization" Margin="12,8"
+        <Grid Grid.Row="0" x:Name="StatusBar" ColumnDefinitions="*,Auto" BackgroundColor="{StaticResource Gray200}"
+              Padding="12,6" IsVisible="False">
+            <Label x:Name="StatusLabel" Grid.Column="0" VerticalOptions="Center" FontSize="12" />
+            <Button Grid.Column="1" x:Name="SyncButton" Text="Sync" FontSize="12" Padding="10,4"
+                    BackgroundColor="{StaticResource Primary}" TextColor="White" Clicked="OnSyncClicked" />
+        </Grid>
+
+        <Picker x:Name="OrgPicker" Grid.Row="1" Title="Organization" Margin="12,8"
                 SelectedIndexChanged="OnOrgChanged" />
 
-        <RefreshView Grid.Row="1" x:Name="Refresh" Refreshing="OnRefresh">
+        <RefreshView Grid.Row="2" x:Name="Refresh" Refreshing="OnRefresh">
             <CollectionView x:Name="TasksView" SelectionMode="Single" SelectionChanged="OnTaskSelected">
                 <CollectionView.EmptyView>
                     <VerticalStackLayout Padding="24" Spacing="8" HorizontalOptions="Center" VerticalOptions="Center">
@@ -18,7 +25,7 @@
                     </VerticalStackLayout>
                 </CollectionView.EmptyView>
                 <CollectionView.ItemTemplate>
-                    <DataTemplate x:DataType="tk:TaskDto">
+                    <DataTemplate x:DataType="data:LocalTask">
                         <Grid Padding="16,10" ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
                             <CheckBox Grid.RowSpan="2" Grid.Column="0" IsChecked="{Binding IsComplete}" InputTransparent="True" />
                             <Label Grid.Row="0" Grid.Column="1" Text="{Binding Title}" FontAttributes="Bold"
@@ -28,6 +35,8 @@
                             <Label Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding Description}"
                                    FontSize="12" TextColor="{StaticResource Gray500}"
                                    LineBreakMode="TailTruncation" MaxLines="2" />
+                            <Label Grid.Row="1" Grid.Column="2" FontSize="12" TextColor="{StaticResource Warning}"
+                                   Text="• not synced" IsVisible="{Binding IsUnsynced}" />
                             <BoxView Grid.Row="1" Grid.ColumnSpan="3" HeightRequest="1" Margin="0,8,0,0"
                                      Color="{StaticResource Gray200}" VerticalOptions="End" />
                         </Grid>
@@ -36,7 +45,7 @@
             </CollectionView>
         </RefreshView>
 
-        <Button Grid.Row="1" Text="+" FontSize="28" Clicked="OnAddClicked"
+        <Button Grid.Row="2" Text="+" FontSize="28" Clicked="OnAddClicked"
                 CornerRadius="28" HeightRequest="56" WidthRequest="56"
                 BackgroundColor="{StaticResource Primary}" TextColor="White"
                 HorizontalOptions="End" VerticalOptions="End" Margin="0,0,20,20" />

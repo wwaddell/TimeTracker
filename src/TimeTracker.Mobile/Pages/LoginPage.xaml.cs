@@ -5,45 +5,62 @@ namespace TimeTracker.Mobile.Pages;
 public partial class LoginPage : ContentPage
 {
     private readonly AuthService _auth;
-    private readonly ApiClient _api;
+    private readonly DataService _data;
     private readonly AppState _state;
     private bool _triedSilent;
 
-    public LoginPage(AuthService auth, ApiClient api, AppState state)
+    public LoginPage(AuthService auth, DataService data, AppState state)
     {
         InitializeComponent();
         _auth = auth;
-        _api = api;
+        _data = data;
         _state = state;
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        // Auto-advance if a cached account can sign in silently — so returning users skip
-        // the button. Only attempt once per page lifetime.
         if (_triedSilent)
         {
             return;
         }
         _triedSilent = true;
 
+        // Returning user with a cached token skips the button.
         if (await _auth.IsSignedInAsync())
         {
             await CompleteSignInAsync();
+        }
+        else if (!DataService.IsOnline)
+        {
+            // Offline + previously set up: let them straight into the cached app without a
+            // fresh token (the API calls will just fail/queue until they're back online).
+            await _state.LoadOrgsAsync(_data);
+            if (_state.Organizations.Count > 0)
+            {
+                EnterApp();
+            }
+            else
+            {
+                ShowError("You're offline and the app hasn't been set up yet. Connect to the internet and sign in once.");
+            }
         }
     }
 
     private async void OnSignInClicked(object? sender, EventArgs e)
     {
+        if (!DataService.IsOnline)
+        {
+            ShowError("You're offline. Connect to the internet to sign in the first time.");
+            return;
+        }
         SetBusy(true);
         try
         {
             var token = await _auth.GetAccessTokenAsync(allowInteractive: true);
             if (string.IsNullOrEmpty(token))
             {
-                // User cancelled the browser prompt.
-                SetBusy(false);
+                SetBusy(false); // user cancelled
                 return;
             }
             await CompleteSignInAsync();
@@ -55,17 +72,26 @@ public partial class LoginPage : ContentPage
         }
     }
 
-    // Load the profile + orgs into shared state, then swap the root to the tab shell.
+    // Pull orgs + the selected org's data into the local cache, then enter the app.
     private async Task CompleteSignInAsync()
     {
         SetBusy(true);
         try
         {
-            _state.Me = await _api.GetMeAsync();
-            _state.Organizations = await _api.GetOrganizationsAsync();
-            _state.EnsureSelection();
-
-            Application.Current!.Windows[0].Page = new AppShell();
+            if (DataService.IsOnline)
+            {
+                await _data.SyncAsync(0);                 // orgs only
+                await _state.LoadOrgsAsync(_data);
+                if (_state.SelectedOrgId != 0)
+                {
+                    await _data.SyncAsync(_state.SelectedOrgId); // that org's projects/tasks/entries
+                }
+            }
+            else
+            {
+                await _state.LoadOrgsAsync(_data);
+            }
+            EnterApp();
         }
         catch (Exception ex)
         {
@@ -73,6 +99,8 @@ public partial class LoginPage : ContentPage
             SetBusy(false);
         }
     }
+
+    private void EnterApp() => Application.Current!.Windows[0].Page = new AppShell();
 
     private void SetBusy(bool busy)
     {
@@ -89,5 +117,6 @@ public partial class LoginPage : ContentPage
     {
         ErrorLabel.Text = message;
         ErrorLabel.IsVisible = true;
+        SetBusy(false);
     }
 }

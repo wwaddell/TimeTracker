@@ -48,6 +48,9 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.9" />
     <!-- MSAL for native interactive sign-in against Entra External ID (CIAM). -->
     <PackageReference Include="Microsoft.Identity.Client" Version="4.84.2" />
+    <!-- On-device SQLite for the offline cache + outbox. -->
+    <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
+    <PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.10" />
   </ItemGroup>
 
   <ItemGroup>

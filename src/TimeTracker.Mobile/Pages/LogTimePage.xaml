@@ -1,35 +1,42 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:te="clr-namespace:TimeTracker.Contracts.TimeEntries;assembly=TimeTracker.Contracts"
+             xmlns:data="clr-namespace:TimeTracker.Mobile.Data"
              x:Class="TimeTracker.Mobile.Pages.LogTimePage"
              Title="Log Time">
-    <Grid RowDefinitions="Auto,*">
+    <Grid RowDefinitions="Auto,Auto,*">
 
-        <!-- Org picker (hidden when the user has just one org) -->
-        <Picker x:Name="OrgPicker" Grid.Row="0" Title="Organization" Margin="12,8"
+        <!-- Status banner: offline and/or pending-to-sync, with a manual Sync button. -->
+        <Grid Grid.Row="0" x:Name="StatusBar" ColumnDefinitions="*,Auto" BackgroundColor="{StaticResource Gray200}"
+              Padding="12,6" IsVisible="False">
+            <Label x:Name="StatusLabel" Grid.Column="0" VerticalOptions="Center" FontSize="12" />
+            <Button Grid.Column="1" x:Name="SyncButton" Text="Sync" FontSize="12" Padding="10,4"
+                    BackgroundColor="{StaticResource Primary}" TextColor="White" Clicked="OnSyncClicked" />
+        </Grid>
+
+        <Picker x:Name="OrgPicker" Grid.Row="1" Title="Organization" Margin="12,8"
                 SelectedIndexChanged="OnOrgChanged" />
 
-        <RefreshView Grid.Row="1" x:Name="Refresh" Refreshing="OnRefresh">
+        <RefreshView Grid.Row="2" x:Name="Refresh" Refreshing="OnRefresh">
             <CollectionView x:Name="EntriesView" SelectionMode="Single" SelectionChanged="OnEntrySelected">
                 <CollectionView.EmptyView>
                     <VerticalStackLayout Padding="24" Spacing="8" HorizontalOptions="Center" VerticalOptions="Center">
-                        <Label Text="No time entries yet." HorizontalOptions="Center"
-                               TextColor="{StaticResource Gray500}" />
-                        <Label Text="Tap + to add your first one." HorizontalOptions="Center"
-                               TextColor="{StaticResource Gray500}" />
+                        <Label Text="No time entries yet." HorizontalOptions="Center" TextColor="{StaticResource Gray500}" />
+                        <Label Text="Tap + to add your first one." HorizontalOptions="Center" TextColor="{StaticResource Gray500}" />
                     </VerticalStackLayout>
                 </CollectionView.EmptyView>
                 <CollectionView.ItemTemplate>
-                    <DataTemplate x:DataType="te:TimeEntryDto">
+                    <DataTemplate x:DataType="data:LocalTimeEntry">
                         <Grid Padding="16,10" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
                             <Label Grid.Row="0" Grid.Column="0" Text="{Binding Note}" FontAttributes="Bold"
                                    LineBreakMode="TailTruncation" MaxLines="2" />
-                            <Label Grid.Row="0" Grid.Column="1" Text="{Binding DurationMinutes, StringFormat='{0} min'}"
+                            <Label Grid.Row="0" Grid.Column="1" Text="{Binding DurationDisplay}"
                                    TextColor="{StaticResource Primary}" FontAttributes="Bold" />
-                            <Label Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" FontSize="12"
-                                   TextColor="{StaticResource Gray500}"
-                                   Text="{Binding EntryDate, StringFormat='{0:ddd, MMM d}'}" />
+                            <HorizontalStackLayout Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Spacing="8">
+                                <Label FontSize="12" TextColor="{StaticResource Gray500}" Text="{Binding DateDisplay}" />
+                                <Label FontSize="12" TextColor="{StaticResource Warning}" Text="• not synced"
+                                       IsVisible="{Binding IsUnsynced}" />
+                            </HorizontalStackLayout>
                             <BoxView Grid.Row="1" Grid.ColumnSpan="2" HeightRequest="1" Margin="0,8,0,0"
                                      Color="{StaticResource Gray200}" VerticalOptions="End" />
                         </Grid>
@@ -38,8 +45,7 @@
             </CollectionView>
         </RefreshView>
 
-        <!-- Floating add button -->
-        <Button Grid.Row="1" Text="+" FontSize="28" Clicked="OnAddClicked"
+        <Button Grid.Row="2" Text="+" FontSize="28" Clicked="OnAddClicked"
                 CornerRadius="28" HeightRequest="56" WidthRequest="56"
                 BackgroundColor="{StaticResource Primary}" TextColor="White"
                 HorizontalOptions="End" VerticalOptions="End" Margin="0,0,20,20" />

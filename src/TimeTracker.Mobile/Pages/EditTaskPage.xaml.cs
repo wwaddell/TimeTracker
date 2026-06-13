@@ -1,6 +1,5 @@
-using TimeTracker.Contracts.Projects;
-using TimeTracker.Contracts.Tasks;
 using TimeTracker.Domain.Enums;
+using TimeTracker.Mobile.Data;
 using TimeTracker.Mobile.Services;
 
 namespace TimeTracker.Mobile.Pages;
@@ -10,18 +9,19 @@ public partial class EditTaskPage : ContentPage
     private static readonly TaskPriority[] Priorities =
         [TaskPriority.Low, TaskPriority.Medium, TaskPriority.High, TaskPriority.Urgent];
 
-    private readonly ApiClient _api;
+    private readonly DataService _data;
     private readonly AppState _state;
-    private readonly TaskDto? _task; // null = new
+    private readonly LocalTask? _task; // null = new
 
-    private List<ProjectPickerDto> _projects = [];
+    private List<LocalProject> _projects = [];
     private int _percent;
     private bool _saving;
+    private bool _dueDateCleared;
 
-    public EditTaskPage(ApiClient api, AppState state, TaskDto? task)
+    public EditTaskPage(DataService data, AppState state, LocalTask? task)
     {
         InitializeComponent();
-        _api = api;
+        _data = data;
         _state = state;
         _task = task;
 
@@ -34,25 +34,16 @@ public partial class EditTaskPage : ContentPage
         PercentSlider.Value = _percent;
         PercentLabel.Text = $"{_percent}%";
         CompleteSwitch.IsToggled = task?.IsComplete ?? false;
-        DueDatePicker.Date = (task?.DueDate ?? DateOnly.FromDateTime(DateTime.Today)).ToDateTime(TimeOnly.MinValue);
+        DueDatePicker.Date = ParseDate(task?.DueDate) ?? DateTime.Today;
 
-        // "(none)" sentinel at index 0; real priorities follow.
         PriorityPicker.ItemsSource = new[] { "(none)" }.Concat(Priorities.Select(p => p.ToString())).ToList();
-        PriorityPicker.SelectedIndex = task?.Priority is { } pr ? Array.IndexOf(Priorities, pr) + 1 : 0;
+        PriorityPicker.SelectedIndex = task?.Priority is { } pr ? Array.IndexOf(Priorities, (TaskPriority)pr) + 1 : 0;
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        try
-        {
-            _projects = (await _api.GetVisibleProjectsAsync(_state.SelectedOrgId)).ToList();
-        }
-        catch (ApiException ex)
-        {
-            ShowError(ex.Message);
-            return;
-        }
+        _projects = await _data.GetProjectsAsync(_state.SelectedOrgId);
         ProjectPicker.ItemsSource = new[] { "(none)" }.Concat(_projects.Select(p => p.Name)).ToList();
         ProjectPicker.SelectedIndex = _task?.ProjectId is { } pid ? _projects.FindIndex(p => p.Id == pid) + 1 : 0;
     }
@@ -61,7 +52,6 @@ public partial class EditTaskPage : ContentPage
     {
         _percent = (int)Math.Round(e.NewValue);
         PercentLabel.Text = $"{_percent}%";
-        // Keep the complete switch in sync at the extremes.
         if (_percent >= 100 && !CompleteSwitch.IsToggled)
         {
             CompleteSwitch.IsToggled = true;
@@ -81,7 +71,6 @@ public partial class EditTaskPage : ContentPage
     }
 
     private void OnClearDueDate(object? sender, EventArgs e) => _dueDateCleared = true;
-    private bool _dueDateCleared;
 
     private async void OnSaveClicked(object? sender, EventArgs e)
     {
@@ -96,42 +85,30 @@ public partial class EditTaskPage : ContentPage
         }
 
         var complete = CompleteSwitch.IsToggled;
-        int? projectId = ProjectPicker.SelectedIndex > 0 ? _projects[ProjectPicker.SelectedIndex - 1].Id : null;
-        TaskPriority? priority = PriorityPicker.SelectedIndex > 0 ? Priorities[PriorityPicker.SelectedIndex - 1] : null;
-        // A new task keeps the chosen due date unless cleared; editing respects the Clear button.
-        DateOnly? dueDate = _dueDateCleared ? null : DateOnly.FromDateTime((DateTime)DueDatePicker.Date);
+        var project = ProjectPicker.SelectedIndex > 0 ? _projects[ProjectPicker.SelectedIndex - 1] : null;
+        int? priority = PriorityPicker.SelectedIndex > 0 ? (int)Priorities[PriorityPicker.SelectedIndex - 1] : null;
+        string? dueDate = _dueDateCleared ? null : DateOnly.FromDateTime((DateTime)DueDatePicker.Date).ToString("yyyy-MM-dd");
 
-        var request = new SaveTaskRequest
-        {
-            Title = TitleEntry.Text.Trim(),
-            Description = string.IsNullOrWhiteSpace(DescriptionEditor.Text) ? null : DescriptionEditor.Text.Trim(),
-            IsComplete = complete,
-            PercentComplete = complete ? 100 : _percent,
-            PercentBeforeComplete = complete ? (_task?.PercentComplete ?? _percent) : null,
-            Priority = priority,
-            DueDate = dueDate,
-            ProjectId = projectId,
-            ReferenceCode = _task?.ReferenceCode,
-            ExternalUrl = _task?.ExternalUrl,
-            // 0 = default to current user (new) / leave unchanged (edit).
-            AssignedToUserId = _task?.AssignedToUserId ?? 0,
-        };
+        var task = _task ?? new LocalTask { OrgId = _state.SelectedOrgId };
+        task.Title = TitleEntry.Text.Trim();
+        task.Description = string.IsNullOrWhiteSpace(DescriptionEditor.Text) ? null : DescriptionEditor.Text.Trim();
+        task.IsComplete = complete;
+        task.PercentComplete = complete ? 100 : _percent;
+        task.PercentBeforeComplete = complete ? (_task?.PercentComplete ?? _percent) : null;
+        task.Priority = priority;
+        task.DueDate = dueDate;
+        task.ProjectId = project?.Id;
+        task.ProjectName = project?.Name;
+        // AssignedToUserId 0 = server defaults to current user (new) / leaves unchanged (edit).
 
         _saving = true;
         SaveButton.Text = "Saving…";
         try
         {
-            if (_task is null)
-            {
-                await _api.CreateTaskAsync(_state.SelectedOrgId, request);
-            }
-            else
-            {
-                await _api.UpdateTaskAsync(_state.SelectedOrgId, _task.Id, request);
-            }
+            await _data.SaveTaskAsync(task);
             await Navigation.PopAsync();
         }
-        catch (ApiException ex)
+        catch (Exception ex)
         {
             ShowError(ex.Message);
             _saving = false;
@@ -139,15 +116,12 @@ public partial class EditTaskPage : ContentPage
         }
     }
 
-    // Jump to the time-entry form pre-linked to this task (saves the task context).
     private async void OnLogTimeClicked(object? sender, EventArgs e)
     {
-        if (_task is null)
-        {
-            return;
-        }
-        await Navigation.PushAsync(new AddTimeEntryPage(_api, _state, entry: null) { });
+        await Navigation.PushAsync(new AddTimeEntryPage(_data, _state, entry: null));
     }
+
+    private static DateTime? ParseDate(string? iso) => DateTime.TryParse(iso, out var dt) ? dt : null;
 
     private void ShowError(string message)
     {

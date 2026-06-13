@@ -1,26 +1,28 @@
 using System.Collections.ObjectModel;
-using TimeTracker.Contracts.TimeEntries;
+using TimeTracker.Mobile.Data;
 using TimeTracker.Mobile.Services;
 
 namespace TimeTracker.Mobile.Pages;
 
 public partial class LogTimePage : ContentPage
 {
-    private const int PageSize = 50;
-
-    private readonly ApiClient _api;
+    private readonly DataService _data;
     private readonly AppState _state;
-    private readonly ObservableCollection<TimeEntryDto> _entries = [];
+    private readonly ObservableCollection<LocalTimeEntry> _entries = [];
     private bool _initialized;
     private bool _suppressOrgEvent;
 
-    public LogTimePage(ApiClient api, AppState state)
+    public LogTimePage(DataService data, AppState state)
     {
         InitializeComponent();
-        _api = api;
+        _data = data;
         _state = state;
         EntriesView.ItemsSource = _entries;
+        // Refresh the list when a background sync brings in new data.
+        _data.Changed += OnDataChanged;
     }
+
+    private void OnDataChanged() => MainThread.BeginInvokeOnMainThread(async () => await ReloadAsync());
 
     protected override async void OnAppearing()
     {
@@ -30,7 +32,7 @@ public partial class LogTimePage : ContentPage
             _initialized = true;
             PopulateOrgPicker();
         }
-        await LoadEntriesAsync();
+        await ReloadAsync();
     }
 
     private void PopulateOrgPicker()
@@ -50,48 +52,70 @@ public partial class LogTimePage : ContentPage
             return;
         }
         _state.SelectedOrgId = _state.Organizations[OrgPicker.SelectedIndex].Id;
-        await LoadEntriesAsync();
+        await ReloadAsync();
+        await _data.SyncAsync(_state.SelectedOrgId); // pull the newly-selected org
     }
 
     private async void OnRefresh(object? sender, EventArgs e)
     {
-        await LoadEntriesAsync();
+        await _data.SyncAsync(_state.SelectedOrgId);
+        await ReloadAsync();
         Refresh.IsRefreshing = false;
     }
 
-    private async Task LoadEntriesAsync()
+    private async void OnSyncClicked(object? sender, EventArgs e)
+    {
+        await _data.SyncAsync(_state.SelectedOrgId);
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
     {
         if (_state.SelectedOrgId == 0)
         {
             return;
         }
-        try
+        var entries = await _data.GetTimeEntriesAsync(_state.SelectedOrgId);
+        _entries.Clear();
+        foreach (var entry in entries)
         {
-            var page = await _api.GetTimeEntriesAsync(_state.SelectedOrgId, 1, PageSize);
-            _entries.Clear();
-            foreach (var entry in page.Items)
-            {
-                _entries.Add(entry);
-            }
+            _entries.Add(entry);
         }
-        catch (ApiException ex)
+        await UpdateStatusBarAsync();
+    }
+
+    // Show the banner only when offline or there are unsynced changes.
+    private async Task UpdateStatusBarAsync()
+    {
+        var pending = await _data.PendingCountAsync();
+        var online = DataService.IsOnline;
+        if (online && pending == 0)
         {
-            await DisplayAlertAsync("Couldn't load entries", ex.Message, "OK");
+            StatusBar.IsVisible = false;
+            return;
         }
+        StatusBar.IsVisible = true;
+        StatusLabel.Text = (online, pending) switch
+        {
+            (false, 0) => "Offline — changes will sync when you're back online.",
+            (false, _) => $"Offline — {pending} change(s) waiting to sync.",
+            (true, _) => $"{pending} change(s) waiting to sync.",
+        };
+        SyncButton.IsVisible = online && pending > 0;
     }
 
     private async void OnAddClicked(object? sender, EventArgs e)
     {
-        await Navigation.PushAsync(new AddTimeEntryPage(_api, _state, entry: null));
+        await Navigation.PushAsync(new AddTimeEntryPage(_data, _state, entry: null));
     }
 
     private async void OnEntrySelected(object? sender, SelectionChangedEventArgs e)
     {
-        if (e.CurrentSelection.FirstOrDefault() is not TimeEntryDto entry)
+        if (e.CurrentSelection.FirstOrDefault() is not LocalTimeEntry entry)
         {
             return;
         }
-        EntriesView.SelectedItem = null; // clear highlight
-        await Navigation.PushAsync(new AddTimeEntryPage(_api, _state, entry));
+        EntriesView.SelectedItem = null;
+        await Navigation.PushAsync(new AddTimeEntryPage(_data, _state, entry));
     }
 }

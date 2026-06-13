@@ -1,24 +1,27 @@
 using System.Collections.ObjectModel;
-using TimeTracker.Contracts.Tasks;
+using TimeTracker.Mobile.Data;
 using TimeTracker.Mobile.Services;
 
 namespace TimeTracker.Mobile.Pages;
 
 public partial class TasksPage : ContentPage
 {
-    private readonly ApiClient _api;
+    private readonly DataService _data;
     private readonly AppState _state;
-    private readonly ObservableCollection<TaskDto> _tasks = [];
+    private readonly ObservableCollection<LocalTask> _tasks = [];
     private bool _initialized;
     private bool _suppressOrgEvent;
 
-    public TasksPage(ApiClient api, AppState state)
+    public TasksPage(DataService data, AppState state)
     {
         InitializeComponent();
-        _api = api;
+        _data = data;
         _state = state;
         TasksView.ItemsSource = _tasks;
+        _data.Changed += OnDataChanged;
     }
+
+    private void OnDataChanged() => MainThread.BeginInvokeOnMainThread(async () => await ReloadAsync());
 
     protected override async void OnAppearing()
     {
@@ -28,7 +31,7 @@ public partial class TasksPage : ContentPage
             _initialized = true;
             PopulateOrgPicker();
         }
-        await LoadTasksAsync();
+        await ReloadAsync();
     }
 
     private void PopulateOrgPicker()
@@ -48,48 +51,70 @@ public partial class TasksPage : ContentPage
             return;
         }
         _state.SelectedOrgId = _state.Organizations[OrgPicker.SelectedIndex].Id;
-        await LoadTasksAsync();
+        await ReloadAsync();
+        await _data.SyncAsync(_state.SelectedOrgId);
     }
 
     private async void OnRefresh(object? sender, EventArgs e)
     {
-        await LoadTasksAsync();
+        await _data.SyncAsync(_state.SelectedOrgId);
+        await ReloadAsync();
         Refresh.IsRefreshing = false;
     }
 
-    private async Task LoadTasksAsync()
+    private async void OnSyncClicked(object? sender, EventArgs e)
+    {
+        await _data.SyncAsync(_state.SelectedOrgId);
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
     {
         if (_state.SelectedOrgId == 0)
         {
             return;
         }
-        try
+        var tasks = await _data.GetTasksAsync(_state.SelectedOrgId);
+        // Open tasks first, then by title; completed sink to the bottom.
+        _tasks.Clear();
+        foreach (var task in tasks.OrderBy(t => t.IsComplete).ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase))
         {
-            var tasks = await _api.GetTasksAsync(_state.SelectedOrgId);
-            _tasks.Clear();
-            foreach (var task in tasks)
-            {
-                _tasks.Add(task);
-            }
+            _tasks.Add(task);
         }
-        catch (ApiException ex)
+        await UpdateStatusBarAsync();
+    }
+
+    private async Task UpdateStatusBarAsync()
+    {
+        var pending = await _data.PendingCountAsync();
+        var online = DataService.IsOnline;
+        if (online && pending == 0)
         {
-            await DisplayAlertAsync("Couldn't load tasks", ex.Message, "OK");
+            StatusBar.IsVisible = false;
+            return;
         }
+        StatusBar.IsVisible = true;
+        StatusLabel.Text = (online, pending) switch
+        {
+            (false, 0) => "Offline — changes will sync when you're back online.",
+            (false, _) => $"Offline — {pending} change(s) waiting to sync.",
+            (true, _) => $"{pending} change(s) waiting to sync.",
+        };
+        SyncButton.IsVisible = online && pending > 0;
     }
 
     private async void OnAddClicked(object? sender, EventArgs e)
     {
-        await Navigation.PushAsync(new EditTaskPage(_api, _state, task: null));
+        await Navigation.PushAsync(new EditTaskPage(_data, _state, task: null));
     }
 
     private async void OnTaskSelected(object? sender, SelectionChangedEventArgs e)
     {
-        if (e.CurrentSelection.FirstOrDefault() is not TaskDto task)
+        if (e.CurrentSelection.FirstOrDefault() is not LocalTask task)
         {
             return;
         }
         TasksView.SelectedItem = null;
-        await Navigation.PushAsync(new EditTaskPage(_api, _state, task));
+        await Navigation.PushAsync(new EditTaskPage(_data, _state, task));
     }
 }

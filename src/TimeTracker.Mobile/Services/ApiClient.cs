@@ -40,8 +40,9 @@ public class ApiClient(HttpClient http)
         return await GetAsync<TimeEntriesPage>(url) ?? new TimeEntriesPage([], page, pageSize, false, []);
     }
 
-    public Task CreateTimeEntryAsync(int orgId, CreateTimeEntryRequest request) =>
-        SendAsync(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/time-entries", request));
+    /// <summary>Creates an entry and returns the new server id (for offline reconciliation).</summary>
+    public Task<long> CreateTimeEntryAsync(int orgId, CreateTimeEntryRequest request) =>
+        PostForIdAsync<long>(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/time-entries", request));
 
     public Task UpdateTimeEntryAsync(int orgId, long id, CreateTimeEntryRequest request) =>
         SendAsync(() => http.PutAsJsonAsync($"/api/organizations/{orgId}/time-entries/{id}", request));
@@ -57,8 +58,9 @@ public class ApiClient(HttpClient http)
         return await GetAsync<List<TaskDto>>(url) ?? [];
     }
 
-    public Task CreateTaskAsync(int orgId, SaveTaskRequest request) =>
-        SendAsync(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/tasks", request));
+    /// <summary>Creates a task and returns the new server id (for offline reconciliation).</summary>
+    public Task<int> CreateTaskAsync(int orgId, SaveTaskRequest request) =>
+        PostForIdAsync<int>(() => http.PostAsJsonAsync($"/api/organizations/{orgId}/tasks", request));
 
     public Task UpdateTaskAsync(int orgId, int id, SaveTaskRequest request) =>
         SendAsync(() => http.PutAsJsonAsync($"/api/organizations/{orgId}/tasks/{id}", request));
@@ -101,6 +103,32 @@ public class ApiClient(HttpClient http)
         }
         EnsureOk(response);
     }
+
+    // POSTs and reads back the server-assigned id from the { id } create response.
+    private async Task<T> PostForIdAsync<T>(Func<Task<HttpResponseMessage>> send)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await send();
+        }
+        catch (Exception ex)
+        {
+            throw new ApiException($"Couldn't reach the server. Check your connection. ({ex.Message})");
+        }
+        EnsureOk(response);
+        try
+        {
+            var created = await response.Content.ReadFromJsonAsync<CreatedIdResponse<T>>();
+            return created!.Id;
+        }
+        catch (Exception ex)
+        {
+            throw new ApiException($"The server sent an unexpected response. ({ex.Message})");
+        }
+    }
+
+    private sealed record CreatedIdResponse<T>(T Id);
 
     private static void EnsureOk(HttpResponseMessage response)
     {

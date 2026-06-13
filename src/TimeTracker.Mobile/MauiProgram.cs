@@ -19,6 +19,12 @@ public static class MauiProgram
         builder.Services.AddSingleton<AppState>();
         builder.Services.AddTransient<AuthHttpMessageHandler>();
 
+        // Offline cache + sync. All singletons: one SQLite connection + one sync gate for
+        // the app's lifetime.
+        builder.Services.AddSingleton<TimeTracker.Mobile.Data.LocalStore>();
+        builder.Services.AddSingleton<SyncService>();
+        builder.Services.AddSingleton<DataService>();
+
         // API HttpClient with the bearer-token handler attached.
         builder.Services.AddHttpClient<ApiClient>(client =>
             {
